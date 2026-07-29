@@ -52,20 +52,23 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 		return "", ErrInvalidBucketName
 	}
 
+	existing, err := oe.metadataDB.GetBucketByName(ctx, newBucket.Name)
+	if err != nil && !errors.Is(err, metadata.ErrBucketNotFound) {
+		return "", ErrInternal
+	}
+	if err == nil {
+		if existing.OwnerID == newBucket.OwnerID {
+			return "", ErrBucketAlreadyOwnedByYou
+		}
+		return "", ErrBucketAlreadyExists
+	}
+
 	bucketID, err := oe.metadataDB.CreateBucket(ctx, model.Bucket{
 		Name:    newBucket.Name,
 		OwnerID: newBucket.OwnerID,
 	})
-
 	if err != nil {
-		switch {
-		case errors.Is(err, metadata.ErrBucketAlreadyExists):
-			return "", ErrBucketAlreadyExists
-		case errors.Is(err, metadata.ErrBucketAlreadyOwnedByYou):
-			return "", ErrBucketAlreadyOwnedByYou
-		default:
-			return "", ErrInternal
-		}
+		return "", ErrInternal
 	}
 
 	return bucketID, nil

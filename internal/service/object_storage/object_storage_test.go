@@ -24,6 +24,11 @@ func (mr *MockMetadataRepository) GetBucket(ctx context.Context, name string, ow
 	return args.Get(0).(model.Bucket), args.Error(1)
 }
 
+func (mr *MockMetadataRepository) GetBucketByName(ctx context.Context, name string) (model.Bucket, error) {
+	args := mr.Mock.Called(ctx, name)
+	return args.Get(0).(model.Bucket), args.Error(1)
+}
+
 func (mr *MockMetadataRepository) ListBuckets(ctx context.Context, ownerID string) ([]model.Bucket, error) {
 	args := mr.Mock.Called(ctx, ownerID)
 	return args.Get(0).([]model.Bucket), args.Error(1)
@@ -50,6 +55,7 @@ func TestCreateBucket(t *testing.T) {
 
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertNotCalled(t, "GetBucketByName", mock.Anything, mock.Anything)
 		mockMetadata.AssertNotCalled(t, "CreateBucket", mock.Anything, mock.Anything)
 	})
 
@@ -95,6 +101,7 @@ func TestCreateBucket(t *testing.T) {
 			_, err := objectStorage.CreateBucket(context.Background(), tc.input)
 
 			assert.ErrorIs(t, err, ErrInvalidBucketName)
+			mockMetadata.AssertNotCalled(t, "GetBucketByName", mock.Anything, mock.Anything)
 			mockMetadata.AssertNotCalled(t, "CreateBucket", mock.Anything, mock.Anything)
 		})
 	}
@@ -102,21 +109,19 @@ func TestCreateBucket(t *testing.T) {
 	t.Run("cannot create new bucket because already exist", func(t *testing.T) {
 		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
-		// somewhere in the storage the bucket exist
 		newBucket := CreateBucketInput{
 			Name:    "profile-users",
 			OwnerID: "12345678",
 		}
 
-		mockMetadata.On("CreateBucket", mock.Anything, model.Bucket{
-			Name:    newBucket.Name,
-			OwnerID: newBucket.OwnerID,
-		}).Return("", metadata.ErrBucketAlreadyExists).Once()
+		mockMetadata.On("GetBucketByName", mock.Anything, newBucket.Name).
+			Return(model.Bucket{Name: newBucket.Name, OwnerID: "different-owner"}, nil).Once()
 
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
-		mockMetadata.AssertExpectations(t)
 		assert.ErrorIs(t, err, ErrBucketAlreadyExists)
+		mockMetadata.AssertExpectations(t)
+		mockMetadata.AssertNotCalled(t, "CreateBucket", mock.Anything, mock.Anything)
 	})
 
 	t.Run("cannot create new bucket because the user already own it", func(t *testing.T) {
@@ -128,15 +133,14 @@ func TestCreateBucket(t *testing.T) {
 			OwnerID: "12345678",
 		}
 
-		mockMetadata.On("CreateBucket", mock.Anything, model.Bucket{
-			Name:    newBucket.Name,
-			OwnerID: newBucket.OwnerID,
-		}).Return("", metadata.ErrBucketAlreadyOwnedByYou).Once()
+		mockMetadata.On("GetBucketByName", mock.Anything, newBucket.Name).
+			Return(model.Bucket{Name: newBucket.Name, OwnerID: newBucket.OwnerID}, nil).Once()
 
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
-		mockMetadata.AssertExpectations(t)
 		assert.ErrorIs(t, err, ErrBucketAlreadyOwnedByYou)
+		mockMetadata.AssertExpectations(t)
+		mockMetadata.AssertNotCalled(t, "CreateBucket", mock.Anything, mock.Anything)
 	})
 
 	t.Run("cannot create new bucket, something went wrong with the metadata repository method", func(t *testing.T) {
@@ -148,15 +152,17 @@ func TestCreateBucket(t *testing.T) {
 			OwnerID: "12345678",
 		}
 
+		mockMetadata.On("GetBucketByName", mock.Anything, newBucket.Name).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 		mockMetadata.On("CreateBucket", mock.Anything, model.Bucket{
 			Name:    newBucket.Name,
 			OwnerID: newBucket.OwnerID,
-		}).Return("", metadata.ErrCannotCreateBucket).Once()
+		}).Return("", assert.AnError).Once()
 
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
-		mockMetadata.AssertExpectations(t)
 		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
 	})
 
 	t.Run("success create bucket", func(t *testing.T) {
@@ -169,6 +175,8 @@ func TestCreateBucket(t *testing.T) {
 			OwnerID: "872371727",
 		}
 
+		mockMetadata.On("GetBucketByName", mock.Anything, newBucket.Name).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 		mockMetadata.On("CreateBucket", mock.Anything, model.Bucket{
 			Name:    newBucket.Name,
 			OwnerID: newBucket.OwnerID,

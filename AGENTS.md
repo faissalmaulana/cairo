@@ -22,9 +22,10 @@ go test -run TestCreateBucket ./internal/service/object_storage/  # single test
 ```
 cmd/server/main.go          — entrypoint (currently empty main())
 internal/
-├── model/metadata.go       — data types (Bucket)
+├── helpers/                — validation functions (ValidateOwnerID, ValidateBucketName)
+├── model/metadata.go       — data types (Bucket) and domain errors
 ├── repository/metadata/    — interface + errors for metadata DB
-└── service/object_storage/ — business logic (CreateBucket)
+└── service/object_storage/ — business logic (CreateBucket, GetBucket, ListBuckets, DeleteBucket)
 ```
 
 - `MetadataRepository` interface lives in `internal/repository/metadata/`, consumed by `object_storage` service.
@@ -41,3 +42,7 @@ internal/
 - Build output goes to `./bin/` (gitignored).
 - Bucket name validation: `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, length 3-63 for bucket creation.
 - No CI, no integration tests, no linter/formatter config yet.
+
+## Design principles
+
+- **Each method does one job.** If a method would need to check existence and then act (e.g., find-then-delete), that is orchestration — wire two single-purpose methods together at the service layer or at implementions rather than pushing double-duty into a single source call. This keeps each method focused and composable.

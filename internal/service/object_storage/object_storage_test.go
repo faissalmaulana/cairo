@@ -31,6 +31,7 @@ func setupTest() (*MockMetadataRepository, *ObjectStorage) {
 
 func TestCreateBucket(t *testing.T) {
 	t.Run("cannot create new bucket because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 		newBucket := CreateBucketInput{
 			Name:    "avatars",
@@ -38,15 +39,13 @@ func TestCreateBucket(t *testing.T) {
 		}
 
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
-		assert.ErrorIs(t, err, ErrNewBucketOwnerEmpty)
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
 		mockMetadata.AssertNotCalled(t, "CreateBucket", mock.Anything, mock.Anything)
 	})
 
 	testCases := []struct {
-		name    string
-		input   CreateBucketInput
-		got     string
-		isError bool
+		name  string
+		input CreateBucketInput
 	}{
 		{
 			name: "cannot create new bucket invalid name (min leng)",
@@ -54,7 +53,6 @@ func TestCreateBucket(t *testing.T) {
 				Name:    "pr",
 				OwnerID: "asdjsaodsaidhisadiisad",
 			},
-			isError: true,
 		},
 		{
 			name: "cannot create new bucket invalid name (max leng)",
@@ -62,7 +60,6 @@ func TestCreateBucket(t *testing.T) {
 				Name:    "asdfghjklasd9asi-absduad82-2aishdiahsdiashdihiahd0-chaushcachiahcuahsuha",
 				OwnerID: "asdjsaodsaidhisadiisad",
 			},
-			isError: true,
 		},
 		{
 			name: "cannot create new bucket invalid name (prefix with hypen)",
@@ -70,7 +67,6 @@ func TestCreateBucket(t *testing.T) {
 				Name:    "-asdfghjklasd9asi-absduad82",
 				OwnerID: "asdjsaodsaidhisadiisad",
 			},
-			isError: true,
 		},
 		{
 			name: "cannot create new bucket invalid name (suffix with hypen)",
@@ -78,12 +74,12 @@ func TestCreateBucket(t *testing.T) {
 				Name:    "asdfghjklasd9asi-absduad82-",
 				OwnerID: "asdjsaodsaidhisadiisad",
 			},
-			isError: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockMetadata, objectStorage := setupTest()
 
 			_, err := objectStorage.CreateBucket(context.Background(), tc.input)
@@ -94,6 +90,7 @@ func TestCreateBucket(t *testing.T) {
 	}
 
 	t.Run("cannot create new bucket because already exist", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 		// somewhere in the storage the bucket exist
 		newBucket := CreateBucketInput{
@@ -109,10 +106,11 @@ func TestCreateBucket(t *testing.T) {
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
 		mockMetadata.AssertExpectations(t)
-		assert.ErrorIs(t, err, metadata.ErrBucketAlreadyExists)
+		assert.ErrorIs(t, err, ErrBucketAlreadyExists)
 	})
 
 	t.Run("cannot create new bucket because the user already own it", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		newBucket := CreateBucketInput{
@@ -128,10 +126,11 @@ func TestCreateBucket(t *testing.T) {
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
 		mockMetadata.AssertExpectations(t)
-		assert.ErrorIs(t, err, metadata.ErrBucketAlreadyOwnedByYou)
+		assert.ErrorIs(t, err, ErrBucketAlreadyOwnedByYou)
 	})
 
 	t.Run("cannot create new bucket, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		newBucket := CreateBucketInput{
@@ -147,10 +146,11 @@ func TestCreateBucket(t *testing.T) {
 		_, err := objectStorage.CreateBucket(context.Background(), newBucket)
 
 		mockMetadata.AssertExpectations(t)
-		assert.ErrorIs(t, err, metadata.ErrCannotCreateBucket)
+		assert.ErrorIs(t, err, ErrInternal)
 	})
 
 	t.Run("success create bucket", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		expctedBucketID := "asdijkacuubosj12"
@@ -174,6 +174,7 @@ func TestCreateBucket(t *testing.T) {
 
 func TestGetBucket(t *testing.T) {
 	t.Run("cannot get bucket because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 		input := GetBucketInput{
 			Name:    "avatars",
@@ -181,11 +182,12 @@ func TestGetBucket(t *testing.T) {
 		}
 
 		_, err := objectStorage.GetBucket(context.Background(), input)
-		assert.ErrorIs(t, err, ErrNewBucketOwnerEmpty)
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
 		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("cannot get bucket because not found", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		input := GetBucketInput{
@@ -198,11 +200,12 @@ func TestGetBucket(t *testing.T) {
 
 		_, err := objectStorage.GetBucket(context.Background(), input)
 
-		assert.ErrorIs(t, err, metadata.ErrBucketNotFound)
+		assert.ErrorIs(t, err, ErrBucketNotFound)
 		mockMetadata.AssertExpectations(t)
 	})
 
 	t.Run("cannot get bucket, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		input := GetBucketInput{
@@ -215,11 +218,12 @@ func TestGetBucket(t *testing.T) {
 
 		_, err := objectStorage.GetBucket(context.Background(), input)
 
-		assert.ErrorIs(t, err, metadata.ErrCannotGetBucket)
+		assert.ErrorIs(t, err, ErrInternal)
 		mockMetadata.AssertExpectations(t)
 	})
 
 	t.Run("success get bucket", func(t *testing.T) {
+		t.Parallel()
 		mockMetadata, objectStorage := setupTest()
 
 		expectedBucket := model.Bucket{

@@ -107,7 +107,7 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		return ErrOwnerIDRequired
 	}
 
-	err := oe.metadataDB.DeleteBucket(ctx, input.Name, input.OwnerID)
+	_, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -115,6 +115,11 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		default:
 			return ErrInternal
 		}
+	}
+
+	err = oe.metadataDB.DeleteBucket(ctx, input.Name, input.OwnerID)
+	if err != nil {
+		return ErrInternal
 	}
 
 	return nil

@@ -337,13 +337,14 @@ func TestDeleteBucket(t *testing.T) {
 			OwnerID: "user-123",
 		}
 
-		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
-			Return(metadata.ErrBucketNotFound).Once()
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 
 		err := objectStorage.DeleteBucket(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrBucketNotFound)
 		mockMetadata.AssertExpectations(t)
+		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("cannot delete bucket, something went wrong with the metadata repository method", func(t *testing.T) {
@@ -354,6 +355,8 @@ func TestDeleteBucket(t *testing.T) {
 			OwnerID: "user-123",
 		}
 
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
 		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(assert.AnError).Once()
 
@@ -371,6 +374,8 @@ func TestDeleteBucket(t *testing.T) {
 			OwnerID: "user-123",
 		}
 
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
 		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(nil).Once()
 

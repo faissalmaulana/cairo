@@ -14,6 +14,11 @@ type CreateBucketInput struct {
 	OwnerID string
 }
 
+type GetBucketInput struct {
+	Name    string
+	OwnerID string
+}
+
 var (
 	/**
 	 * Bucket names can only contain lowercase letters (a-z), numbers (0-9), and hyphens (-).
@@ -61,4 +66,22 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 	}
 
 	return bucketID, nil
+}
+
+func (oe *ObjectStorage) GetBucket(ctx context.Context, input GetBucketInput) (*model.Bucket, error) {
+	if len(input.OwnerID) == 0 {
+		return nil, ErrNewBucketOwnerEmpty
+	}
+
+	bucket, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
+	if err != nil {
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			return nil, metadata.ErrBucketNotFound
+		default:
+			return nil, metadata.ErrCannotGetBucket
+		}
+	}
+
+	return &bucket, nil
 }

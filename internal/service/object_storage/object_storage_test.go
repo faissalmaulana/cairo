@@ -19,6 +19,11 @@ func (mr *MockMetadataRepository) CreateBucket(ctx context.Context, newBucket mo
 	return args.String(0), args.Error(1)
 }
 
+func (mr *MockMetadataRepository) GetBucket(ctx context.Context, name string, ownerID string) (model.Bucket, error) {
+	args := mr.Mock.Called(ctx, name, ownerID)
+	return args.Get(0).(model.Bucket), args.Error(1)
+}
+
 func setupTest() (*MockMetadataRepository, *ObjectStorage) {
 	m := new(MockMetadataRepository)
 	return m, NewObjectStorage(m)
@@ -164,5 +169,77 @@ func TestCreateBucket(t *testing.T) {
 		assert.NoError(t, err)
 		mockMetadata.AssertExpectations(t)
 		assert.Equal(t, expctedBucketID, bucketID)
+	})
+}
+
+func TestGetBucket(t *testing.T) {
+	t.Run("cannot get bucket because owner's ID is not provided", func(t *testing.T) {
+		mockMetadata, objectStorage := setupTest()
+		input := GetBucketInput{
+			Name:    "avatars",
+			OwnerID: "",
+		}
+
+		_, err := objectStorage.GetBucket(context.Background(), input)
+		assert.ErrorIs(t, err, ErrNewBucketOwnerEmpty)
+		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot get bucket because not found", func(t *testing.T) {
+		mockMetadata, objectStorage := setupTest()
+
+		input := GetBucketInput{
+			Name:    "not-found-bucket",
+			OwnerID: "12345678",
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		_, err := objectStorage.GetBucket(context.Background(), input)
+
+		assert.ErrorIs(t, err, metadata.ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot get bucket, something went wrong with the metadata repository method", func(t *testing.T) {
+		mockMetadata, objectStorage := setupTest()
+
+		input := GetBucketInput{
+			Name:    "profile-users",
+			OwnerID: "12345678",
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrCannotGetBucket).Once()
+
+		_, err := objectStorage.GetBucket(context.Background(), input)
+
+		assert.ErrorIs(t, err, metadata.ErrCannotGetBucket)
+		mockMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success get bucket", func(t *testing.T) {
+		mockMetadata, objectStorage := setupTest()
+
+		expectedBucket := model.Bucket{
+			ID:      "asdijkacuubosj12",
+			Name:    "avatars",
+			OwnerID: "872371727",
+		}
+
+		input := GetBucketInput{
+			Name:    expectedBucket.Name,
+			OwnerID: expectedBucket.OwnerID,
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(expectedBucket, nil).Once()
+
+		bucket, err := objectStorage.GetBucket(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+		assert.Equal(t, &expectedBucket, bucket)
 	})
 }

@@ -19,6 +19,11 @@ type GetBucketInput struct {
 	OwnerID string
 }
 
+type DeleteBucketInput struct {
+	Name    string
+	OwnerID string
+}
+
 var (
 	ErrBucketAlreadyExists     = errors.New("bucket already exists")
 	ErrBucketAlreadyOwnedByYou = errors.New("bucket already owned by you")
@@ -82,4 +87,35 @@ func (oe *ObjectStorage) GetBucket(ctx context.Context, input GetBucketInput) (*
 	}
 
 	return &bucket, nil
+}
+
+func (oe *ObjectStorage) ListBuckets(ctx context.Context, ownerID string) ([]model.Bucket, error) {
+	if err := helpers.ValidateOwnerID(ownerID); err != nil {
+		return nil, ErrOwnerIDRequired
+	}
+
+	buckets, err := oe.metadataDB.ListBuckets(ctx, ownerID)
+	if err != nil {
+		return nil, ErrInternal
+	}
+
+	return buckets, nil
+}
+
+func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInput) error {
+	if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
+		return ErrOwnerIDRequired
+	}
+
+	err := oe.metadataDB.DeleteBucket(ctx, input.Name, input.OwnerID)
+	if err != nil {
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			return ErrBucketNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	return nil
 }

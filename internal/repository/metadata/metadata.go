@@ -10,6 +10,8 @@ import (
 type MetadataRepository interface {
 	CreateBucket(ctx context.Context, newBucket model.Bucket) (string, error)
 	GetBucket(ctx context.Context, name string, ownerID string) (model.Bucket, error)
+	ListBuckets(ctx context.Context, ownerID string) ([]model.Bucket, error)
+	DeleteBucket(ctx context.Context, name string, ownerID string) error
 }
 
 type CreateBucketInput struct {

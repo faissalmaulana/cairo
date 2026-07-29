@@ -39,5 +39,5 @@ internal/
 - Tests use `testify` (`assert`, `mock`). Mock interfaces, not concrete types.
 - Table-driven tests with named subtests (`t.Run`).
 - Build output goes to `./bin/` (gitignored).
-- Bucket name validation: `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, length 3-63.
+- Bucket name validation: `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, length 3-63 for bucket creation.
 - No CI, no integration tests, no linter/formatter config yet.

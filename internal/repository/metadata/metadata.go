@@ -11,6 +11,8 @@ type MetadataRepository interface {
 	CreateBucket(ctx context.Context, newBucket model.Bucket) (string, error)
 	GetBucket(ctx context.Context, name string, ownerID string) (model.Bucket, error)
 	GetBucketByName(ctx context.Context, name string) (model.Bucket, error)
+	UpdateBucket(ctx context.Context, name string, ownerID string, update model.UpdateBucketInput) error
+	ReplaceBucket(ctx context.Context, bucket model.Bucket) error
 	ListBuckets(ctx context.Context, ownerID string) ([]model.Bucket, error)
 	DeleteBucket(ctx context.Context, name string, ownerID string) error
 }

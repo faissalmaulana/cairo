@@ -34,6 +34,16 @@ func (mr *MockMetadataRepository) ListBuckets(ctx context.Context, ownerID strin
 	return args.Get(0).([]model.Bucket), args.Error(1)
 }
 
+func (mr *MockMetadataRepository) UpdateBucket(ctx context.Context, name string, ownerID string, update model.UpdateBucketInput) error {
+	args := mr.Mock.Called(ctx, name, ownerID, update)
+	return args.Error(0)
+}
+
+func (mr *MockMetadataRepository) ReplaceBucket(ctx context.Context, bucket model.Bucket) error {
+	args := mr.Mock.Called(ctx, bucket)
+	return args.Error(0)
+}
+
 func (mr *MockMetadataRepository) DeleteBucket(ctx context.Context, name string, ownerID string) error {
 	args := mr.Mock.Called(ctx, name, ownerID)
 	return args.Error(0)
@@ -388,6 +398,83 @@ func TestDeleteBucket(t *testing.T) {
 			Return(nil).Once()
 
 		err := objectStorage.DeleteBucket(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+	})
+}
+
+func TestSetBucketVisibility(t *testing.T) {
+	t.Run("cannot set visibility because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, objectStorage := setupTest()
+		input := SetBucketVisibilityInput{
+			Name:      "avatars",
+			OwnerID:   "",
+			Visibilty: model.Public,
+		}
+
+		err := objectStorage.SetBucketVisibility(context.Background(), input)
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockMetadata.AssertNotCalled(t, "UpdateBucket", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot set visibility because bucket not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, objectStorage := setupTest()
+		input := SetBucketVisibilityInput{
+			Name:      "not-found-bucket",
+			OwnerID:   "user-123",
+			Visibilty: model.Public,
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		err := objectStorage.SetBucketVisibility(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockMetadata.AssertNotCalled(t, "UpdateBucket", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot set visibility, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, objectStorage := setupTest()
+		input := SetBucketVisibilityInput{
+			Name:      "avatars",
+			OwnerID:   "user-123",
+			Visibilty: model.Public,
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockMetadata.On("UpdateBucket", mock.Anything, input.Name, input.OwnerID, mock.Anything).
+			Return(assert.AnError).Once()
+
+		err := objectStorage.SetBucketVisibility(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success set bucket visibility to public", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, objectStorage := setupTest()
+		input := SetBucketVisibilityInput{
+			Name:      "avatars",
+			OwnerID:   "user-123",
+			Visibilty: model.Public,
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockMetadata.On("UpdateBucket", mock.Anything, input.Name, input.OwnerID, model.UpdateBucketInput{
+			Visibilty: &input.Visibilty,
+		}).Return(nil).Once()
+
+		err := objectStorage.SetBucketVisibility(context.Background(), input)
 
 		assert.NoError(t, err)
 		mockMetadata.AssertExpectations(t)

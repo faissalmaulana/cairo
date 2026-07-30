@@ -21,3 +21,7 @@ type Bucket struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+type UpdateBucketInput struct {
+	Visibilty *BucketVisibility
+}

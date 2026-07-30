@@ -24,6 +24,12 @@ type DeleteBucketInput struct {
 	OwnerID string
 }
 
+type SetBucketVisibilityInput struct {
+	Name      string
+	OwnerID   string
+	Visibilty model.BucketVisibility
+}
+
 var (
 	ErrBucketAlreadyExists     = errors.New("bucket already exists")
 	ErrBucketAlreadyOwnedByYou = errors.New("bucket already owned by you")
@@ -122,6 +128,31 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 	}
 
 	err = oe.metadataDB.DeleteBucket(ctx, input.Name, input.OwnerID)
+	if err != nil {
+		return ErrInternal
+	}
+
+	return nil
+}
+
+func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucketVisibilityInput) error {
+	if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
+		return ErrOwnerIDRequired
+	}
+
+	_, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
+	if err != nil {
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			return ErrBucketNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	err = oe.metadataDB.UpdateBucket(ctx, input.Name, input.OwnerID, model.UpdateBucketInput{
+		Visibilty: &input.Visibilty,
+	})
 	if err != nil {
 		return ErrInternal
 	}

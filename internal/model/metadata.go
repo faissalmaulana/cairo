@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type BucketVisibility int
 
 func (bv BucketVisibility) String() string {
@@ -16,4 +18,6 @@ type Bucket struct {
 	Name      string
 	OwnerID   string
 	Visibilty BucketVisibility
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

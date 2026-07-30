@@ -64,8 +64,9 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 	}
 
 	bucketID, err := oe.metadataDB.CreateBucket(ctx, model.Bucket{
-		Name:    newBucket.Name,
-		OwnerID: newBucket.OwnerID,
+		Name:      newBucket.Name,
+		OwnerID:   newBucket.OwnerID,
+		Visibilty: model.Private,
 	})
 	if err != nil {
 		return "", ErrInternal

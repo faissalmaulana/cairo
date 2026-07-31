@@ -18,6 +18,12 @@ type DataInput struct {
 	Directory string
 }
 
+var (
+	ErrDirectoryRequired = errors.New("directory is required")
+	ErrFileNotFound      = errors.New("file not found")
+	ErrDirectoryNotFound = errors.New("directory not found")
+)
+
 func NewDisk(entrypoint string) *Disk {
 	return &Disk{
 		entrypoint: entrypoint,
@@ -26,14 +32,14 @@ func NewDisk(entrypoint string) *Disk {
 
 func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
 	if directory == "" {
-		return nil, errors.New("directory is required")
+		return nil, ErrDirectoryRequired
 	}
 
 	path := filepath.Join(d.entrypoint, directory, d.decodeFilename(filename))
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errors.New("file not found")
+			return nil, ErrFileNotFound
 		}
 		return nil, err
 	}
@@ -46,13 +52,13 @@ func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
 // are never read, so memory cost is proportional to the number of entries.
 func (d *Disk) List(directory string) ([]string, error) {
 	if directory == "" {
-		return nil, errors.New("directory is required")
+		return nil, ErrDirectoryRequired
 	}
 
 	entries, err := os.ReadDir(filepath.Join(d.entrypoint, directory))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errors.New("directory not found")
+			return nil, ErrDirectoryNotFound
 		}
 		return nil, err
 	}
@@ -70,7 +76,7 @@ func (d *Disk) List(directory string) ([]string, error) {
 
 func (d *Disk) Write(data DataInput) (int, error) {
 	if data.Directory == "" {
-		return 1, errors.New("directory is required")
+		return 1, ErrDirectoryRequired
 	}
 
 	if err := os.MkdirAll(filepath.Join(d.entrypoint, data.Directory), 0755); err != nil {
@@ -105,7 +111,7 @@ func (d *Disk) Delete(path string) error {
 	stored := filepath.Join(d.entrypoint, d.decodeFilename(path))
 	if err := os.Remove(stored); err != nil {
 		if os.IsNotExist(err) {
-			return errors.New("file not found")
+			return ErrFileNotFound
 		}
 		return err
 	}

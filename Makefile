@@ -1,5 +1,5 @@
-.PHONY: air air-api air-term
-APP ?= api
+.PHONY: air air-server air-term
+APP ?= server
 ARGS ?=
 
 air:
@@ -8,5 +8,5 @@ air:
 		--build.entrypoint "./bin/$(APP)" \
 		--build.args_bin "$(ARGS)" \
 
-air-api:
-	@$(MAKE) air APP=api
+air-server:
+	@$(MAKE) air APP=server

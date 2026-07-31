@@ -8,13 +8,11 @@ Go (1.26.5) object storage service for unstructured data.
 
 ```bash
 # build & dev
-make air-api          # live-reload the API server (air)
-go build -o ./bin/server ./cmd/server   # manual build
-
+make air-server
 # test
-go test ./...                    # all tests
+go test ./...                    # all tests (25 pass)
 go test -race ./...              # with race detection
-go test -run TestCreateBucket ./internal/service/object_storage/  # single test
+go test -run TestSetBucketVisibility ./internal/service/object_storage/  # single test
 ```
 
 ## Architecture
@@ -25,7 +23,7 @@ internal/
 ├── helpers/                — validation functions (ValidateOwnerID, ValidateBucketName)
 ├── model/metadata.go       — data types (Bucket) and domain errors
 ├── repository/metadata/    — interface + errors for metadata DB
-└── service/object_storage/ — business logic (CreateBucket, GetBucket, ListBuckets, DeleteBucket)
+└── service/object_storage/ — business logic (CreateBucket, GetBucket, ListBuckets, DeleteBucket, SetBucketVisibility)
 ```
 
 - `MetadataRepository` interface lives in `internal/repository/metadata/`, consumed by `object_storage` service.
@@ -46,3 +44,4 @@ internal/
 ## Design principles
 
 - **Each method does one job.** If a method would need to check existence and then act (e.g., find-then-delete), that is orchestration — wire two single-purpose methods together at the service layer or at implementions rather than pushing double-duty into a single source call. This keeps each method focused and composable.
+- **Partial updates over full replacement.** `UpdateBucket(ctx, name, ownerID, update model.UpdateBucketInput)` uses pointer fields (`*BucketVisibility`) to express which fields to update. `ReplaceBucket(ctx, bucket)` also exists on the interface for full replacement, but partial updates are preferred for single-field mutations.

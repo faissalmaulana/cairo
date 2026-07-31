@@ -8,25 +8,9 @@ import (
 	"testing"
 
 	"github.com/faissalmaulana/cairo/internal/service/disk"
-	"github.com/stretchr/testify/suite"
 )
 
-type WriteSuite struct {
-	suite.Suite
-	entry string
-	d     *disk.Disk
-}
-
-func (s *WriteSuite) SetupTest() {
-	s.entry = s.T().TempDir()
-	s.d = disk.NewDisk(s.entry)
-}
-
-func TestWriteSuite(t *testing.T) {
-	suite.Run(t, new(WriteSuite))
-}
-
-func (s *WriteSuite) TestWrite() {
+func TestWrite(t *testing.T) {
 	testCases := []struct {
 		name      string
 		content   string
@@ -49,77 +33,71 @@ func (s *WriteSuite) TestWrite() {
 			directory: "dir",
 			seed: func(t *testing.T, entry string) {
 				t.Helper()
-				s.Require().NoError(os.MkdirAll(filepath.Join(entry, "dir"), 0o755))
-				s.Require().NoError(os.WriteFile(filepath.Join(entry, "dir", "a.txt"), []byte("first"), 0o644))
+				if err := os.MkdirAll(filepath.Join(entry, "dir"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(entry, "dir", "a.txt"), []byte("first"), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			},
 			wantPath: filepath.Join("dir", "a.txt"),
 		},
 	}
 
 	for _, tc := range testCases {
-		s.Run(tc.name, func() {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := t.TempDir()
+			d := disk.NewDisk(entry)
+
 			if tc.seed != nil {
-				tc.seed(s.T(), s.entry)
+				tc.seed(t, entry)
 			}
 
-			code, err := s.d.Write(disk.DataInput{
+			code, err := d.Write(disk.DataInput{
 				Src:       strings.NewReader(tc.content),
 				Filename:  tc.filename,
 				Directory: tc.directory,
 			})
-			s.Require().NoError(err)
-			s.Equal(0, code)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code != 0 {
+				t.Fatalf("expected code 0, got %d", code)
+			}
 
-			got, err := os.ReadFile(filepath.Join(s.entry, tc.wantPath))
-			s.Require().NoError(err)
-			s.Equal(tc.content, string(got))
+			got, err := os.ReadFile(filepath.Join(entry, tc.wantPath))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.content {
+				t.Fatalf("expected %q, got %q", tc.content, string(got))
+			}
 		})
 	}
 }
 
-func (s *WriteSuite) TestRead() {
-	s.Run("reads streamed content from file", func() {
-		dir := filepath.Join(s.entry, "profile")
-		s.Require().NoError(os.MkdirAll(dir, 0o755))
-		s.Require().NoError(os.WriteFile(filepath.Join(dir, "avatars haaland.txt"), []byte("HELLO,WORLD"), 0o644))
+func TestWriteError(t *testing.T) {
+	t.Run("fails when directory is empty", func(t *testing.T) {
+		d := disk.NewDisk(t.TempDir())
 
-		rc, err := s.d.Read("avatars/haaland.txt", "profile")
-		s.Require().NoError(err)
-		defer rc.Close()
-
-		got, err := io.ReadAll(rc)
-		s.Require().NoError(err)
-		s.Equal("HELLO,WORLD", string(got))
-	})
-}
-
-func (s *WriteSuite) TestReadError() {
-	s.Run("fails when directory is empty", func() {
-		_, err := s.d.Read("a.txt", "")
-		s.EqualError(err, "directory is required")
-	})
-
-	s.Run("fails when file does not exist", func() {
-		_, err := s.d.Read("missing.txt", "dir")
-		s.EqualError(err, "file not found")
-	})
-}
-
-func (s *WriteSuite) TestWriteError() {
-	s.Run("fails when directory is empty", func() {
-		code, err := s.d.Write(disk.DataInput{
+		code, err := d.Write(disk.DataInput{
 			Src:       strings.NewReader("data"),
 			Filename:  "a.txt",
 			Directory: "",
 		})
-
-		s.EqualError(err, "directory is required")
-		s.Equal(1, code)
+		if err == nil || err.Error() != "directory is required" {
+			t.Fatalf("expected error %q, got %v", "directory is required", err)
+		}
+		if code != 1 {
+			t.Fatalf("expected code 1, got %d", code)
+		}
 	})
 
-	s.Run("fails when entrypoint is not a directory", func() {
-		entry := filepath.Join(s.T().TempDir(), "entry")
-		s.Require().NoError(os.WriteFile(entry, []byte("x"), 0o644))
+	t.Run("fails when entrypoint is not a directory", func(t *testing.T) {
+		entry := filepath.Join(t.TempDir(), "entry")
+		if err := os.WriteFile(entry, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 
 		d := disk.NewDisk(entry)
 		code, err := d.Write(disk.DataInput{
@@ -127,8 +105,84 @@ func (s *WriteSuite) TestWriteError() {
 			Filename:  "a.txt",
 			Directory: "dir",
 		})
-
-		s.Error(err)
-		s.Equal(1, code)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if code != 1 {
+			t.Fatalf("expected code 1, got %d", code)
+		}
 	})
+}
+
+func TestRead(t *testing.T) {
+	entry := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(entry, "profile"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(entry, "profile", "avatars haaland.txt"), []byte("HELLO,WORLD"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := disk.NewDisk(entry)
+
+	rc, err := d.Read("avatars/haaland.txt", "profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "HELLO,WORLD" {
+		t.Fatalf("expected %q, got %q", "HELLO,WORLD", string(got))
+	}
+}
+
+func TestReadError(t *testing.T) {
+	t.Run("fails when directory is empty", func(t *testing.T) {
+		d := disk.NewDisk(t.TempDir())
+
+		_, err := d.Read("a.txt", "")
+		if err == nil || err.Error() != "directory is required" {
+			t.Fatalf("expected error %q, got %v", "directory is required", err)
+		}
+	})
+
+	t.Run("fails when file does not exist", func(t *testing.T) {
+		d := disk.NewDisk(t.TempDir())
+
+		_, err := d.Read("missing.txt", "dir")
+		if err == nil || err.Error() != "file not found" {
+			t.Fatalf("expected error %q, got %v", "file not found", err)
+		}
+	})
+}
+
+func TestDelete(t *testing.T) {
+	entry := t.TempDir()
+	file := filepath.Join(entry, "profile avatars haaland.txt")
+	if err := os.WriteFile(file, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := disk.NewDisk(entry)
+
+	if err := d.Delete("profile/avatars/haaland.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("expected file to be removed, stat error: %v", err)
+	}
+}
+
+func TestDeleteError(t *testing.T) {
+	d := disk.NewDisk(t.TempDir())
+
+	err := d.Delete("profile/avatars/haaland.txt")
+	if err == nil || err.Error() != "file not found" {
+		t.Fatalf("expected error %q, got %v", "file not found", err)
+	}
 }

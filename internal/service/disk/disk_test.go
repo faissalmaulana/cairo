@@ -65,12 +65,13 @@ func (s *WriteSuite) TestWrite() {
 				tc.seed(s.T(), s.entry)
 			}
 
-			err := s.d.Write(disk.DataInput{
+			code, err := s.d.Write(disk.DataInput{
 				Src:       strings.NewReader(tc.content),
 				Filename:  tc.filename,
 				Directory: tc.directory,
 			})
 			s.Require().NoError(err)
+			s.Equal(0, code)
 
 			got, err := os.ReadFile(filepath.Join(s.entry, tc.wantPath))
 			s.Require().NoError(err)
@@ -81,13 +82,14 @@ func (s *WriteSuite) TestWrite() {
 
 func (s *WriteSuite) TestWriteError() {
 	s.Run("fails when directory is empty", func() {
-		err := s.d.Write(disk.DataInput{
+		code, err := s.d.Write(disk.DataInput{
 			Src:       strings.NewReader("data"),
 			Filename:  "a.txt",
 			Directory: "",
 		})
 
 		s.EqualError(err, "directory is required")
+		s.Equal(1, code)
 	})
 
 	s.Run("fails when entrypoint is not a directory", func() {
@@ -95,12 +97,13 @@ func (s *WriteSuite) TestWriteError() {
 		s.Require().NoError(os.WriteFile(entry, []byte("x"), 0o644))
 
 		d := disk.NewDisk(entry)
-		err := d.Write(disk.DataInput{
+		code, err := d.Write(disk.DataInput{
 			Src:       strings.NewReader("data"),
 			Filename:  "a.txt",
 			Directory: "dir",
 		})
 
 		s.Error(err)
+		s.Equal(1, code)
 	})
 }

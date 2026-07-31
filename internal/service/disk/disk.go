@@ -24,33 +24,37 @@ func NewDisk(entrypoint string) *Disk {
 	}
 }
 
-func (d *Disk) Write(data DataInput) error {
+func (d *Disk) Write(data DataInput) (int, error) {
 	if data.Directory == "" {
-		return errors.New("directory is required")
+		return 1, errors.New("directory is required")
 	}
 
 	if err := os.MkdirAll(filepath.Join(d.entrypoint, data.Directory), 0755); err != nil {
-		return err
+		return 1, err
 	}
 
 	f, err := os.CreateTemp(d.entrypoint, "tempfile")
 	if err != nil {
-		return err
+		return 1, err
 	}
 
 	defer os.Remove(f.Name())
 	defer f.Close()
 
 	if _, err := io.Copy(f, data.Src); err != nil {
-		return err
+		return 1, err
 	}
 
 	if err := f.Sync(); err != nil {
-		return err
+		return 1, err
 	}
 
 	dst := filepath.Join(d.entrypoint, data.Directory, d.decodeFilename(data.Filename))
-	return os.Rename(f.Name(), dst)
+	if err := os.Rename(f.Name(), dst); err != nil {
+		return 1, err
+	}
+
+	return 0, nil
 }
 
 func (d *Disk) decodeFilename(filename string) string {

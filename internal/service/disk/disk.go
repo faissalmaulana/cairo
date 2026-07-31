@@ -41,6 +41,33 @@ func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
 	return f, nil
 }
 
+// List returns the logical names of all files inside directory, encoded back
+// to "/"-separated form. Subdirectories are skipped. The contents of the files
+// are never read, so memory cost is proportional to the number of entries.
+func (d *Disk) List(directory string) ([]string, error) {
+	if directory == "" {
+		return nil, errors.New("directory is required")
+	}
+
+	entries, err := os.ReadDir(filepath.Join(d.entrypoint, directory))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("directory not found")
+		}
+		return nil, err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		names = append(names, d.encodeFilename(entry.Name()))
+	}
+
+	return names, nil
+}
+
 func (d *Disk) Write(data DataInput) (int, error) {
 	if data.Directory == "" {
 		return 1, errors.New("directory is required")

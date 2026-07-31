@@ -74,6 +74,17 @@ func (d *Disk) Write(data DataInput) (int, error) {
 	return 0, nil
 }
 
+func (d *Disk) Delete(path string) error {
+	stored := filepath.Join(d.entrypoint, d.decodeFilename(path))
+	if err := os.Remove(stored); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("file not found")
+		}
+		return err
+	}
+	return nil
+}
+
 func (d *Disk) decodeFilename(filename string) string {
 
 	return strings.Join(strings.Split(filename, "/"), " ")

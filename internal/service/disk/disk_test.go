@@ -1,6 +1,7 @@
 package disk_test
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,10 +20,6 @@ type WriteSuite struct {
 func (s *WriteSuite) SetupTest() {
 	s.entry = s.T().TempDir()
 	s.d = disk.NewDisk(s.entry)
-}
-
-func (s *WriteSuite) TearDownTest() {
-	s.Require().NoError(os.RemoveAll(s.entry))
 }
 
 func TestWriteSuite(t *testing.T) {
@@ -78,6 +75,34 @@ func (s *WriteSuite) TestWrite() {
 			s.Equal(tc.content, string(got))
 		})
 	}
+}
+
+func (s *WriteSuite) TestRead() {
+	s.Run("reads streamed content from file", func() {
+		dir := filepath.Join(s.entry, "profile")
+		s.Require().NoError(os.MkdirAll(dir, 0o755))
+		s.Require().NoError(os.WriteFile(filepath.Join(dir, "avatars haaland.txt"), []byte("HELLO,WORLD"), 0o644))
+
+		rc, err := s.d.Read("avatars/haaland.txt", "profile")
+		s.Require().NoError(err)
+		defer rc.Close()
+
+		got, err := io.ReadAll(rc)
+		s.Require().NoError(err)
+		s.Equal("HELLO,WORLD", string(got))
+	})
+}
+
+func (s *WriteSuite) TestReadError() {
+	s.Run("fails when directory is empty", func() {
+		_, err := s.d.Read("a.txt", "")
+		s.EqualError(err, "directory is required")
+	})
+
+	s.Run("fails when file does not exist", func() {
+		_, err := s.d.Read("missing.txt", "dir")
+		s.EqualError(err, "file not found")
+	})
 }
 
 func (s *WriteSuite) TestWriteError() {

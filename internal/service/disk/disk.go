@@ -24,6 +24,23 @@ func NewDisk(entrypoint string) *Disk {
 	}
 }
 
+func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
+	if directory == "" {
+		return nil, errors.New("directory is required")
+	}
+
+	path := filepath.Join(d.entrypoint, directory, d.decodeFilename(filename))
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("file not found")
+		}
+		return nil, err
+	}
+
+	return f, nil
+}
+
 func (d *Disk) Write(data DataInput) (int, error) {
 	if data.Directory == "" {
 		return 1, errors.New("directory is required")

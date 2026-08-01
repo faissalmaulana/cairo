@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type Disk struct {
@@ -13,15 +12,17 @@ type Disk struct {
 }
 
 type DataInput struct {
-	Src       io.Reader
-	Filename  string
-	Directory string
+	Src          io.Reader
+	Filename     string
+	Directory    string
+	Subdirectory string
 }
 
 var (
-	ErrDirectoryRequired = errors.New("directory is required")
-	ErrFileNotFound      = errors.New("file not found")
-	ErrDirectoryNotFound = errors.New("directory not found")
+	ErrDirectoryRequired    = errors.New("directory is required")
+	ErrSubdirectoryRequired = errors.New("subdirectory is required")
+	ErrFileNotFound         = errors.New("file not found")
+	ErrDirectoryNotFound    = errors.New("directory not found")
 )
 
 func NewDisk(entrypoint string) *Disk {
@@ -30,12 +31,15 @@ func NewDisk(entrypoint string) *Disk {
 	}
 }
 
-func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
+func (d *Disk) Read(filename, directory, subdirectory string) (io.ReadCloser, error) {
 	if directory == "" {
 		return nil, ErrDirectoryRequired
 	}
+	if subdirectory == "" {
+		return nil, ErrSubdirectoryRequired
+	}
 
-	path := filepath.Join(d.entrypoint, directory, d.decodeFilename(filename))
+	path := filepath.Join(d.entrypoint, directory, subdirectory, filename)
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,15 +51,15 @@ func (d *Disk) Read(filename, directory string) (io.ReadCloser, error) {
 	return f, nil
 }
 
-// List returns the logical names of all files inside directory, encoded back
-// to "/"-separated form. Subdirectories are skipped. The contents of the files
-// are never read, so memory cost is proportional to the number of entries.
-func (d *Disk) List(directory string) ([]string, error) {
+func (d *Disk) List(directory, subdirectory string) ([]string, error) {
 	if directory == "" {
 		return nil, ErrDirectoryRequired
 	}
+	if subdirectory == "" {
+		return nil, ErrSubdirectoryRequired
+	}
 
-	entries, err := os.ReadDir(filepath.Join(d.entrypoint, directory))
+	entries, err := os.ReadDir(filepath.Join(d.entrypoint, directory, subdirectory))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrDirectoryNotFound
@@ -68,7 +72,7 @@ func (d *Disk) List(directory string) ([]string, error) {
 		if entry.IsDir() {
 			continue
 		}
-		names = append(names, d.encodeFilename(entry.Name()))
+		names = append(names, entry.Name())
 	}
 
 	return names, nil
@@ -78,8 +82,11 @@ func (d *Disk) Write(data DataInput) (int, error) {
 	if data.Directory == "" {
 		return 1, ErrDirectoryRequired
 	}
+	if data.Subdirectory == "" {
+		return 1, ErrSubdirectoryRequired
+	}
 
-	if err := os.MkdirAll(filepath.Join(d.entrypoint, data.Directory), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(d.entrypoint, data.Directory, data.Subdirectory), 0755); err != nil {
 		return 1, err
 	}
 
@@ -99,7 +106,7 @@ func (d *Disk) Write(data DataInput) (int, error) {
 		return 1, err
 	}
 
-	dst := filepath.Join(d.entrypoint, data.Directory, d.decodeFilename(data.Filename))
+	dst := filepath.Join(d.entrypoint, data.Directory, data.Subdirectory, data.Filename)
 	if err := os.Rename(f.Name(), dst); err != nil {
 		return 1, err
 	}
@@ -107,8 +114,15 @@ func (d *Disk) Write(data DataInput) (int, error) {
 	return 0, nil
 }
 
-func (d *Disk) Delete(path string) error {
-	stored := filepath.Join(d.entrypoint, d.decodeFilename(path))
+func (d *Disk) Delete(filename, directory, subdirectory string) error {
+	if directory == "" {
+		return ErrDirectoryRequired
+	}
+	if subdirectory == "" {
+		return ErrSubdirectoryRequired
+	}
+
+	stored := filepath.Join(d.entrypoint, directory, subdirectory, filename)
 	if err := os.Remove(stored); err != nil {
 		if os.IsNotExist(err) {
 			return ErrFileNotFound
@@ -116,14 +130,4 @@ func (d *Disk) Delete(path string) error {
 		return err
 	}
 	return nil
-}
-
-func (d *Disk) decodeFilename(filename string) string {
-
-	return strings.Join(strings.Split(filename, "/"), " ")
-}
-
-func (d *Disk) encodeFilename(filename string) string {
-
-	return strings.Join(strings.Split(filename, " "), "/")
 }

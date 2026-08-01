@@ -59,6 +59,7 @@ var (
 	ErrInternal                = errors.New("internal error")
 	ErrInvalidBucketName       = errors.New("invalid bucket name")
 	ErrObjectNotFound          = errors.New("object not found")
+	ErrUnauthorized            = errors.New("unauthorized")
 	ErrOwnerIDRequired         = errors.New("owner's ID is required")
 )
 
@@ -240,11 +241,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 }
 
 func (oe *ObjectStorage) DownloadObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, error) {
-	if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
-		return nil, ErrOwnerIDRequired
-	}
-
-	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	buck, err := oe.metadataDB.GetBucketByName(ctx, input.BucketName)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -254,12 +251,21 @@ func (oe *ObjectStorage) DownloadObject(ctx context.Context, input DownloadObjec
 		}
 	}
 
-	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, input.OwnerID, input.Name)
+	if buck.Visibilty == model.Private {
+		if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
+			return nil, ErrOwnerIDRequired
+		}
+		if buck.OwnerID != input.OwnerID {
+			return nil, ErrUnauthorized
+		}
+	}
+
+	objectMetadata, err := oe.objectDB.GetObject(ctx, buck.ID, buck.OwnerID, input.Name)
 	if err != nil {
 		return nil, ErrObjectNotFound
 	}
 
-	rc, err := oe.disk.Read(input.OwnerID, objectMetadata.Path)
+	rc, err := oe.disk.Read(buck.OwnerID, objectMetadata.Path)
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound):

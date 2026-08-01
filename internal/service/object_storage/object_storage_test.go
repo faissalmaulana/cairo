@@ -680,22 +680,6 @@ func TestUploadObject(t *testing.T) {
 }
 
 func TestDownloadObject(t *testing.T) {
-	t.Run("cannot download object because owner's ID is not provided", func(t *testing.T) {
-		t.Parallel()
-		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
-		input := DownloadObjectInput{
-			BucketName: "avatars",
-			OwnerID:    "",
-			Name:       "haaland.png",
-		}
-
-		_, err := objectStorage.DownloadObject(context.Background(), input)
-
-		assert.ErrorIs(t, err, ErrOwnerIDRequired)
-		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
-		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	})
-
 	t.Run("cannot download object because bucket not found", func(t *testing.T) {
 		t.Parallel()
 		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
@@ -705,7 +689,7 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 
 		_, err := objectStorage.DownloadObject(context.Background(), input)
@@ -724,12 +708,54 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(model.Bucket{}, assert.AnError).Once()
 
 		_, err := objectStorage.DownloadObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot download object from private bucket because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "",
+			Name:       "haaland.png",
+		}
+
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+			Return(bucket, nil).Once()
+
+		_, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot download object from private bucket because owner's ID is not the bucket owner", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "intruder-123",
+			Name:       "haaland.png",
+		}
+
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+			Return(bucket, nil).Once()
+
+		_, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrUnauthorized)
 		mockMetadata.AssertExpectations(t)
 		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
@@ -743,11 +769,11 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "missing.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, input.OwnerID, input.Name).
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
 
 		_, err := objectStorage.DownloadObject(context.Background(), input)
@@ -770,12 +796,12 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: input.Name, Path: "some/hash"}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, input.OwnerID, input.Name).
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 
 		_, err := objectStorage.DownloadObject(context.Background(), input)
@@ -800,12 +826,12 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: input.Name, Path: "some/hash"}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, input.OwnerID, input.Name).
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 
 		_, err := objectStorage.DownloadObject(context.Background(), input)
@@ -815,10 +841,10 @@ func TestDownloadObject(t *testing.T) {
 		mockObjectMetadata.AssertExpectations(t)
 	})
 
-	t.Run("success download object", func(t *testing.T) {
+	t.Run("success download object from private bucket", func(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
 		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
@@ -834,9 +860,79 @@ func TestDownloadObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, input.OwnerID, input.Name).
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
+			Return(object, nil).Once()
+
+		rc, err := objectStorage.DownloadObject(context.Background(), input)
+		require.NoError(t, err)
+		defer rc.Close()
+
+		got, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, "HELLO,WORLD", string(got))
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success download object from public bucket without owner's ID", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+		file := filepath.Join(entry, bucket.OwnerID, object.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "",
+			Name:       "haaland.png",
+		}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
+			Return(object, nil).Once()
+
+		rc, err := objectStorage.DownloadObject(context.Background(), input)
+		require.NoError(t, err)
+		defer rc.Close()
+
+		got, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, "HELLO,WORLD", string(got))
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success download object from public bucket with a different owner's ID", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+		file := filepath.Join(entry, bucket.OwnerID, object.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "someone-else",
+			Name:       "haaland.png",
+		}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 
 		rc, err := objectStorage.DownloadObject(context.Background(), input)

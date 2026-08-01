@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"hash"
+	"io"
 	"regexp"
 )
 
@@ -24,9 +26,29 @@ func ValidateBucketName(name string) error {
 	return nil
 }
 
-func GenerateSHA256(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
+type CheckSummer interface {
+	Hash() Hash
+}
+
+type Hash interface {
+	io.Writer
+	Sum() string
+}
+
+func GenerateSHA256() Hash {
+	return &sha256Hash{hasher: sha256.New()}
+}
+
+type sha256Hash struct {
+	hasher hash.Hash
+}
+
+func (h *sha256Hash) Write(p []byte) (int, error) {
+	return h.hasher.Write(p)
+}
+
+func (h *sha256Hash) Sum() string {
+	return hex.EncodeToString(h.hasher.Sum(nil))
 }
 
 // HashName returns the hex-encoded sha256 digest of input, suitable for use

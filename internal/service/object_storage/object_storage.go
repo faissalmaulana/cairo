@@ -1,6 +1,7 @@
 package objectstorage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -58,22 +59,30 @@ var (
 	ErrBucketNotFound          = errors.New("bucket not found")
 	ErrInternal                = errors.New("internal error")
 	ErrInvalidBucketName       = errors.New("invalid bucket name")
-	ErrObjectNotFound          = errors.New("object not found")
-	ErrUnauthorized            = errors.New("unauthorized")
-	ErrOwnerIDRequired         = errors.New("owner's ID is required")
+	ErrObjectNotFound     = errors.New("object not found")
+	ErrUnauthorized       = errors.New("unauthorized")
+	ErrOwnerIDRequired    = errors.New("owner's ID is required")
+	ErrChecksumMismatch   = errors.New("checksum mismatch")
 )
 
 type ObjectStorage struct {
 	bucketDB metadata.BucketMetadataRepository
 	objectDB metadata.ObjectMetadataRepository
-	disk       *disk.Disk
+	disk     *disk.Disk
+	checksum helpers.CheckSummer
 }
 
-func NewObjectStorage(metadata metadata.BucketMetadataRepository, objectMetadata metadata.ObjectMetadataRepository, disk *disk.Disk) *ObjectStorage {
+func NewObjectStorage(
+	metadata metadata.BucketMetadataRepository,
+	objectMetadata metadata.ObjectMetadataRepository,
+	disk *disk.Disk,
+	checksum helpers.CheckSummer,
+) *ObjectStorage {
 	return &ObjectStorage{
 		bucketDB: metadata,
-		objectDB:   objectMetadata,
-		disk:       disk,
+		objectDB: objectMetadata,
+		disk:     disk,
+		checksum: checksum,
 	}
 }
 
@@ -214,7 +223,8 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		}
 	}
 
-	cr := &countingReader{src: input.Content}
+	hash := oe.checksum.Hash()
+	cr := &countingReader{src: io.TeeReader(input.Content, hash)}
 	hashedBucketID := helpers.HashName(bucket.ID)
 	hashedKey := helpers.HashName(input.Name)
 
@@ -227,12 +237,16 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		return "", ErrInternal
 	}
 
+	checksum := hash.Sum()
+
 	objectID, err := oe.objectDB.CreateObject(ctx, model.Object{
-		BucketID: bucket.ID,
-		Key:      input.Name,
-		Path:     filepath.Join(hashedBucketID, hashedKey),
-		Size:     int(cr.n),
+		BucketID:  bucket.ID,
+		Key:       input.Name,
+		Path:      filepath.Join(hashedBucketID, hashedKey),
+		Size:      int(cr.n),
+		Sha256sum: checksum,
 	})
+
 	if err != nil {
 		return "", ErrInternal
 	}
@@ -274,8 +288,18 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 			return nil, ErrInternal
 		}
 	}
+	defer rc.Close()
 
-	return rc, nil
+	hash := oe.checksum.Hash()
+	var buf bytes.Buffer
+	if _, err := io.Copy(io.MultiWriter(hash, &buf), rc); err != nil {
+		return nil, ErrInternal
+	}
+	if hash.Sum() != objectMetadata.Sha256sum {
+		return nil, ErrChecksumMismatch
+	}
+
+	return io.NopCloser(bytes.NewReader(buf.Bytes())), nil
 }
 
 func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID string) ([]model.Object, error) {

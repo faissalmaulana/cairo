@@ -80,16 +80,33 @@ func (mor *MockObjectMetadataRepository) DeleteObject(ctx context.Context, bucke
 	return args.Error(0)
 }
 
+type MockChecksum struct {
+	mock.Mock
+}
+
+func (mc *MockChecksum) Hash() helpers.Hash {
+	args := mc.Mock.Called()
+	return args.Get(0).(helpers.Hash)
+}
+
+func checksumOf(data string) string {
+	h := helpers.GenerateSHA256()
+	h.Write([]byte(data))
+	return h.Sum()
+}
+
 func setupTest(t *testing.T) (*MockBucketMetadataRepository, *ObjectStorage) {
 	m := new(MockBucketMetadataRepository)
 	om := new(MockObjectMetadataRepository)
-	return m, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()))
+	cm := new(MockChecksum)
+	return m, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm)
 }
 
 func setupObjectTest(t *testing.T) (*MockBucketMetadataRepository, *MockObjectMetadataRepository, *ObjectStorage) {
 	m := new(MockBucketMetadataRepository)
 	om := new(MockObjectMetadataRepository)
-	return m, om, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()))
+	cm := new(MockChecksum)
+	return m, om, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm)
 }
 
 func TestCreateBucket(t *testing.T) {
@@ -584,7 +601,8 @@ func TestUploadObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -595,6 +613,7 @@ func TestUploadObject(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		_, err := objectStorage.UploadObject(context.Background(), input)
 
@@ -608,7 +627,8 @@ func TestUploadObject(t *testing.T) {
 		entry := t.TempDir()
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -623,11 +643,13 @@ func TestUploadObject(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 		mockObjectMetadata.On("CreateObject", mock.Anything, model.Object{
-			BucketID: bucket.ID,
-			Key:      input.Name,
-			Path:     filepath.Join(hashedBucketID, hashedKey),
-			Size:     len("HELLO,WORLD"),
+			BucketID:  bucket.ID,
+			Key:       input.Name,
+			Path:      filepath.Join(hashedBucketID, hashedKey),
+			Size:      len("HELLO,WORLD"),
+			Sha256sum: checksumOf("HELLO,WORLD"),
 		}).Return("", assert.AnError).Once()
 
 		_, err := objectStorage.UploadObject(context.Background(), input)
@@ -642,7 +664,8 @@ func TestUploadObject(t *testing.T) {
 		entry := t.TempDir()
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -658,12 +681,14 @@ func TestUploadObject(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		mockObjectMetadata.On("CreateObject", mock.Anything, model.Object{
-			BucketID: bucket.ID,
-			Key:      input.Name,
-			Path:     filepath.Join(hashedBucketID, hashedKey),
-			Size:     len("HELLO,WORLD"),
+			BucketID:  bucket.ID,
+			Key:       input.Name,
+			Path:      filepath.Join(hashedBucketID, hashedKey),
+			Size:      len("HELLO,WORLD"),
+			Sha256sum: checksumOf("HELLO,WORLD"),
 		}).Return(expectedObjectID, nil).Once()
 
 		objectID, err := objectStorage.UploadObject(context.Background(), input)
@@ -788,7 +813,7 @@ func TestGetObject(t *testing.T) {
 		entry := t.TempDir()
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -818,7 +843,7 @@ func TestGetObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -845,14 +870,16 @@ func TestGetObject(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
 		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
-		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: checksumOf("HELLO,WORLD")}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
 		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
 		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -864,6 +891,7 @@ func TestGetObject(t *testing.T) {
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		rc, err := objectStorage.GetObject(context.Background(), input)
 		require.NoError(t, err)
@@ -874,20 +902,23 @@ func TestGetObject(t *testing.T) {
 		assert.Equal(t, "HELLO,WORLD", string(got))
 		mockMetadata.AssertExpectations(t)
 		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
 	})
 
 	t.Run("success get object from public bucket without owner's ID", func(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
 		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
-		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: checksumOf("HELLO,WORLD")}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
 		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
 		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -899,6 +930,7 @@ func TestGetObject(t *testing.T) {
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		rc, err := objectStorage.GetObject(context.Background(), input)
 		require.NoError(t, err)
@@ -909,20 +941,23 @@ func TestGetObject(t *testing.T) {
 		assert.Equal(t, "HELLO,WORLD", string(got))
 		mockMetadata.AssertExpectations(t)
 		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
 	})
 
 	t.Run("success get object from public bucket with a different owner's ID", func(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
 		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
-		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: checksumOf("HELLO,WORLD")}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
 		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
 		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -934,6 +969,7 @@ func TestGetObject(t *testing.T) {
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		rc, err := objectStorage.GetObject(context.Background(), input)
 		require.NoError(t, err)
@@ -944,6 +980,42 @@ func TestGetObject(t *testing.T) {
 		assert.Equal(t, "HELLO,WORLD", string(got))
 		mockMetadata.AssertExpectations(t)
 		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
+	})
+
+	t.Run("cannot get object because checksum mismatch", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: "0000000000000000000000000000000000000000000000000000000000000000"}
+		file := filepath.Join(entry, bucket.OwnerID, object.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
+			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
+
+		_, err := objectStorage.GetObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrChecksumMismatch)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
 	})
 }
 
@@ -1136,7 +1208,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",
@@ -1165,7 +1237,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",
@@ -1200,7 +1272,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",

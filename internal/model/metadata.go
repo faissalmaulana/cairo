@@ -22,6 +22,15 @@ type Bucket struct {
 	UpdatedAt time.Time
 }
 
+type Object struct {
+	Id string
+	// object key
+	BucketName string
+	Key        string
+	Size       int
+	Sha256sum  string
+}
+
 type UpdateBucketInput struct {
 	Visibilty *BucketVisibility
 }

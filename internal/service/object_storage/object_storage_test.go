@@ -2,12 +2,18 @@ package objectstorage
 
 import (
 	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/faissalmaulana/cairo/internal/model"
 	"github.com/faissalmaulana/cairo/internal/repository/metadata"
+	"github.com/faissalmaulana/cairo/internal/service/disk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type MockMetadataRepository struct {
@@ -49,15 +55,46 @@ func (mr *MockMetadataRepository) DeleteBucket(ctx context.Context, name string,
 	return args.Error(0)
 }
 
-func setupTest() (*MockMetadataRepository, *ObjectStorage) {
+type MockObjectMetadataRepository struct {
+	mock.Mock
+}
+
+func (mor *MockObjectMetadataRepository) CreateObject(ctx context.Context, object model.Object) (string, error) {
+	args := mor.Mock.Called(ctx, object)
+	return args.String(0), args.Error(1)
+}
+
+func (mor *MockObjectMetadataRepository) GetObject(ctx context.Context, bucketName, ownerID, name string) (model.Object, error) {
+	args := mor.Mock.Called(ctx, bucketName, ownerID, name)
+	return args.Get(0).(model.Object), args.Error(1)
+}
+
+func (mor *MockObjectMetadataRepository) ListObjects(ctx context.Context, bucketName, ownerID string) ([]model.Object, error) {
+	args := mor.Mock.Called(ctx, bucketName, ownerID)
+	return args.Get(0).([]model.Object), args.Error(1)
+}
+
+func (mor *MockObjectMetadataRepository) DeleteObject(ctx context.Context, bucketName, ownerID, name string) error {
+	args := mor.Mock.Called(ctx, bucketName, ownerID, name)
+	return args.Error(0)
+}
+
+func setupTest(t *testing.T) (*MockMetadataRepository, *ObjectStorage) {
 	m := new(MockMetadataRepository)
-	return m, NewObjectStorage(m)
+	om := new(MockObjectMetadataRepository)
+	return m, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()))
+}
+
+func setupObjectTest(t *testing.T) (*MockMetadataRepository, *MockObjectMetadataRepository, *ObjectStorage) {
+	m := new(MockMetadataRepository)
+	om := new(MockObjectMetadataRepository)
+	return m, om, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()))
 }
 
 func TestCreateBucket(t *testing.T) {
 	t.Run("cannot create new bucket because owner's ID is not provided", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		newBucket := CreateBucketInput{
 			Name:    "avatars",
 			OwnerID: "",
@@ -106,7 +143,7 @@ func TestCreateBucket(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			mockMetadata, objectStorage := setupTest()
+			mockMetadata, objectStorage := setupTest(t)
 
 			_, err := objectStorage.CreateBucket(context.Background(), tc.input)
 
@@ -118,7 +155,7 @@ func TestCreateBucket(t *testing.T) {
 
 	t.Run("cannot create new bucket because already exist", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		newBucket := CreateBucketInput{
 			Name:    "profile-users",
 			OwnerID: "12345678",
@@ -136,7 +173,7 @@ func TestCreateBucket(t *testing.T) {
 
 	t.Run("cannot create new bucket because the user already own it", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		newBucket := CreateBucketInput{
 			Name:    "profile-users",
@@ -155,7 +192,7 @@ func TestCreateBucket(t *testing.T) {
 
 	t.Run("cannot create new bucket, something went wrong with the metadata repository method", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		newBucket := CreateBucketInput{
 			Name:    "profile-users",
@@ -177,7 +214,7 @@ func TestCreateBucket(t *testing.T) {
 
 	t.Run("success create bucket", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		expctedBucketID := "asdijkacuubosj12"
 		newBucket := CreateBucketInput{
@@ -203,7 +240,7 @@ func TestCreateBucket(t *testing.T) {
 func TestGetBucket(t *testing.T) {
 	t.Run("cannot get bucket because owner's ID is not provided", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := GetBucketInput{
 			Name:    "avatars",
 			OwnerID: "",
@@ -216,7 +253,7 @@ func TestGetBucket(t *testing.T) {
 
 	t.Run("cannot get bucket because not found", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		input := GetBucketInput{
 			Name:    "not-found-bucket",
@@ -234,7 +271,7 @@ func TestGetBucket(t *testing.T) {
 
 	t.Run("cannot get bucket, something went wrong with the metadata repository method", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		input := GetBucketInput{
 			Name:    "profile-users",
@@ -252,7 +289,7 @@ func TestGetBucket(t *testing.T) {
 
 	t.Run("success get bucket", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		expectedBucket := model.Bucket{
 			ID:      "asdijkacuubosj12",
@@ -279,7 +316,7 @@ func TestGetBucket(t *testing.T) {
 func TestListBuckets(t *testing.T) {
 	t.Run("cannot list buckets because owner's ID is not provided", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		_, err := objectStorage.ListBuckets(context.Background(), "")
 		assert.ErrorIs(t, err, ErrOwnerIDRequired)
@@ -288,7 +325,7 @@ func TestListBuckets(t *testing.T) {
 
 	t.Run("cannot list buckets, something went wrong with the metadata repository method", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		mockMetadata.On("ListBuckets", mock.Anything, "user-123").
 			Return([]model.Bucket{}, assert.AnError).Once()
@@ -301,7 +338,7 @@ func TestListBuckets(t *testing.T) {
 
 	t.Run("success list buckets empty", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		mockMetadata.On("ListBuckets", mock.Anything, "user-123").
 			Return([]model.Bucket{}, nil).Once()
@@ -315,7 +352,7 @@ func TestListBuckets(t *testing.T) {
 
 	t.Run("success list buckets", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 
 		expected := []model.Bucket{
 			{ID: "id-1", Name: "avatars", OwnerID: "user-123"},
@@ -336,7 +373,7 @@ func TestListBuckets(t *testing.T) {
 func TestDeleteBucket(t *testing.T) {
 	t.Run("cannot delete bucket because owner's ID is not provided", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := DeleteBucketInput{
 			Name:    "avatars",
 			OwnerID: "",
@@ -349,7 +386,7 @@ func TestDeleteBucket(t *testing.T) {
 
 	t.Run("cannot delete bucket because not found", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := DeleteBucketInput{
 			Name:    "not-found-bucket",
 			OwnerID: "user-123",
@@ -367,7 +404,7 @@ func TestDeleteBucket(t *testing.T) {
 
 	t.Run("cannot delete bucket, something went wrong with the metadata repository method", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := DeleteBucketInput{
 			Name:    "avatars",
 			OwnerID: "user-123",
@@ -386,7 +423,7 @@ func TestDeleteBucket(t *testing.T) {
 
 	t.Run("success delete bucket", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := DeleteBucketInput{
 			Name:    "avatars",
 			OwnerID: "user-123",
@@ -407,7 +444,7 @@ func TestDeleteBucket(t *testing.T) {
 func TestSetBucketVisibility(t *testing.T) {
 	t.Run("cannot set visibility because owner's ID is not provided", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
 			Name:      "avatars",
 			OwnerID:   "",
@@ -422,7 +459,7 @@ func TestSetBucketVisibility(t *testing.T) {
 
 	t.Run("cannot set visibility because bucket not found", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
 			Name:      "not-found-bucket",
 			OwnerID:   "user-123",
@@ -441,7 +478,7 @@ func TestSetBucketVisibility(t *testing.T) {
 
 	t.Run("cannot set visibility, something went wrong with the metadata repository method", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
 			Name:      "avatars",
 			OwnerID:   "user-123",
@@ -461,7 +498,7 @@ func TestSetBucketVisibility(t *testing.T) {
 
 	t.Run("success set bucket visibility to public", func(t *testing.T) {
 		t.Parallel()
-		mockMetadata, objectStorage := setupTest()
+		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
 			Name:      "avatars",
 			OwnerID:   "user-123",
@@ -478,5 +515,438 @@ func TestSetBucketVisibility(t *testing.T) {
 
 		assert.NoError(t, err)
 		mockMetadata.AssertExpectations(t)
+	})
+}
+
+func TestUploadObject(t *testing.T) {
+	t.Run("cannot upload object because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("data"),
+		}
+
+		_, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockObjectMetadata.AssertNotCalled(t, "CreateObject", mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot upload object because bucket not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("data"),
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		_, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "CreateObject", mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot upload object, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("data"),
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrCannotGetBucket).Once()
+
+		_, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "CreateObject", mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot upload object because disk write failed", func(t *testing.T) {
+		t.Parallel()
+		entry := filepath.Join(t.TempDir(), "entry")
+		require.NoError(t, os.WriteFile(entry, []byte("x"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("data"),
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+
+		_, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "CreateObject", mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot upload object because object metadata commit failed", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("data"),
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockObjectMetadata.On("CreateObject", mock.Anything, mock.Anything).
+			Return("", assert.AnError).Once()
+
+		_, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success upload object", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		expectedObjectID := "object-id-123"
+		input := UploadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+			Content:    strings.NewReader("HELLO,WORLD"),
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockObjectMetadata.On("CreateObject", mock.Anything, mock.Anything).
+			Return(expectedObjectID, nil).Once()
+
+		objectID, err := objectStorage.UploadObject(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		assert.Equal(t, expectedObjectID, objectID)
+	})
+}
+
+func TestDownloadObject(t *testing.T) {
+	t.Run("cannot download object because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "",
+			Name:       "haaland.png",
+		}
+
+		_, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot download object because bucket not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		_, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot download object because object not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "missing.png",
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+
+		_, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrObjectNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("success download object", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "avatars"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(entry, "avatars", "haaland.png"), []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DownloadObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+
+		rc, err := objectStorage.DownloadObject(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+		defer rc.Close()
+		got, err := io.ReadAll(rc)
+		assert.NoError(t, err)
+		assert.Equal(t, "HELLO,WORLD", string(got))
+	})
+}
+
+func TestListObjects(t *testing.T) {
+	t.Run("cannot list objects because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		_, err := objectStorage.ListObjects(context.Background(), "avatars", "")
+
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockObjectMetadata.AssertNotCalled(t, "ListObjects", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot list objects because bucket not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		mockMetadata.On("GetBucket", mock.Anything, "avatars", "user-123").
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		_, err := objectStorage.ListObjects(context.Background(), "avatars", "user-123")
+
+		assert.ErrorIs(t, err, ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "ListObjects", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot list objects, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		mockMetadata.On("GetBucket", mock.Anything, "avatars", "user-123").
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockObjectMetadata.On("ListObjects", mock.Anything, "avatars", "user-123").
+			Return([]model.Object{}, assert.AnError).Once()
+
+		_, err := objectStorage.ListObjects(context.Background(), "avatars", "user-123")
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success list objects empty", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		mockMetadata.On("GetBucket", mock.Anything, "avatars", "user-123").
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockObjectMetadata.On("ListObjects", mock.Anything, "avatars", "user-123").
+			Return([]model.Object{}, nil).Once()
+
+		objects, err := objectStorage.ListObjects(context.Background(), "avatars", "user-123")
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		assert.Empty(t, objects)
+	})
+
+	t.Run("success list objects", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		expected := []model.Object{
+			{Id: "id-1", BucketName: "avatars", Key: "haaland.png", Size: 11},
+			{Id: "id-2", BucketName: "avatars", Key: "debruyne.png", Size: 10},
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, "avatars", "user-123").
+			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
+		mockObjectMetadata.On("ListObjects", mock.Anything, "avatars", "user-123").
+			Return(expected, nil).Once()
+
+		objects, err := objectStorage.ListObjects(context.Background(), "avatars", "user-123")
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		assert.Equal(t, expected, objects)
+	})
+}
+
+func TestDeleteObject(t *testing.T) {
+	t.Run("cannot delete object because owner's ID is not provided", func(t *testing.T) {
+		t.Parallel()
+		_, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "",
+			Name:       "haaland.png",
+		}
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrOwnerIDRequired)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot delete object because object not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "missing.png",
+		}
+
+		mockObjectMetadata.On("GetObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrObjectNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "DeleteObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot delete object, something went wrong with the metadata repository method", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockObjectMetadata.On("GetObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(model.Object{}, metadata.ErrCannotGetObject).Once()
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "DeleteObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot delete object because disk delete failed", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockObjectMetadata.On("GetObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(model.Object{Id: "id-1", BucketName: "avatars", Key: "haaland.png"}, nil).Once()
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockObjectMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "DeleteObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot delete object because object metadata delete failed", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(entry, "avatars haaland.png"), []byte("data"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockObjectMetadata.On("GetObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(model.Object{Id: "id-1", BucketName: "avatars", Key: "haaland.png"}, nil).Once()
+		mockObjectMetadata.On("DeleteObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(assert.AnError).Once()
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success delete object", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		file := filepath.Join(entry, "avatars haaland.png")
+		require.NoError(t, os.WriteFile(file, []byte("data"), 0o644))
+
+		mockMetadata := new(MockMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry))
+
+		input := DeleteObjectInput{
+			BucketName: "avatars",
+			OwnerID:    "user-123",
+			Name:       "haaland.png",
+		}
+
+		mockObjectMetadata.On("GetObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(model.Object{Id: "id-1", BucketName: "avatars", Key: "haaland.png"}, nil).Once()
+		mockObjectMetadata.On("DeleteObject", mock.Anything, input.BucketName, input.OwnerID, input.Name).
+			Return(nil).Once()
+
+		err := objectStorage.DeleteObject(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockObjectMetadata.AssertExpectations(t)
+		_, err = os.Stat(file)
+		assert.True(t, os.IsNotExist(err))
 	})
 }

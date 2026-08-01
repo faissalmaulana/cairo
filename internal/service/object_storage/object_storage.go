@@ -203,7 +203,8 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		return "", ErrOwnerIDRequired
 	}
 
-	if _, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID); err != nil {
+	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return "", ErrBucketNotFound
@@ -213,18 +214,23 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	}
 
 	cr := &countingReader{src: input.Content}
+	hashedBucketID := helpers.HashName(bucket.ID)
+	hashedKey := helpers.HashName(input.Name)
+
 	if code, err := oe.disk.Write(disk.DataInput{
-		Src:       cr,
-		Filename:  input.Name,
-		Directory: input.BucketName,
+		Src:          cr,
+		Filename:     hashedKey,
+		Directory:    input.OwnerID,
+		Subdirectory: hashedBucketID,
 	}); err != nil || code != 0 {
 		return "", ErrInternal
 	}
 
 	objectID, err := oe.objectDB.CreateObject(ctx, model.Object{
-		BucketName: input.BucketName,
-		Key:        input.Name,
-		Size:       int(cr.n),
+		BucketID: bucket.ID,
+		Key:      input.Name,
+		Path:     filepath.Join(hashedBucketID, hashedKey),
+		Size:     int(cr.n),
 	})
 	if err != nil {
 		return "", ErrInternal
@@ -238,7 +244,8 @@ func (oe *ObjectStorage) DownloadObject(ctx context.Context, input DownloadObjec
 		return nil, ErrOwnerIDRequired
 	}
 
-	if _, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID); err != nil {
+	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return nil, ErrBucketNotFound
@@ -247,7 +254,12 @@ func (oe *ObjectStorage) DownloadObject(ctx context.Context, input DownloadObjec
 		}
 	}
 
-	rc, err := oe.disk.Read(input.Name, input.BucketName)
+	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, input.OwnerID, input.Name)
+	if err != nil {
+		return nil, ErrObjectNotFound
+	}
+
+	rc, err := oe.disk.Read(input.OwnerID, objectMetadata.Path)
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound):
@@ -274,6 +286,7 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		}
 	}
 
+	// TODO: get from bucket ID
 	objects, err := oe.objectDB.ListObjects(ctx, bucketName, ownerID)
 	if err != nil {
 		return nil, ErrInternal
@@ -287,7 +300,18 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		return ErrOwnerIDRequired
 	}
 
-	if _, err := oe.objectDB.GetObject(ctx, input.BucketName, input.OwnerID, input.Name); err != nil {
+	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	if err != nil {
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			return ErrBucketNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	object, err := oe.objectDB.GetObject(ctx, bucket.ID, input.OwnerID, input.Name)
+	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrObjectNotFound):
 			return ErrObjectNotFound
@@ -296,10 +320,12 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		}
 	}
 
-	if err := oe.disk.Delete(filepath.Join(input.BucketName, input.Name)); err != nil {
+	// TODO: just find from object path
+	if err := oe.disk.Delete(input.OwnerID, object.Path); err != nil {
 		return ErrInternal
 	}
 
+	// TODO: get from bucketID
 	if err := oe.objectDB.DeleteObject(ctx, input.BucketName, input.OwnerID, input.Name); err != nil {
 		return ErrInternal
 	}

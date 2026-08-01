@@ -31,16 +31,12 @@ func NewDisk(entrypoint string) *Disk {
 	}
 }
 
-func (d *Disk) Read(filename, directory, subdirectory string) (io.ReadCloser, error) {
+func (d *Disk) Read(directory, path string) (io.ReadCloser, error) {
 	if directory == "" {
 		return nil, ErrDirectoryRequired
 	}
-	if subdirectory == "" {
-		return nil, ErrSubdirectoryRequired
-	}
 
-	path := filepath.Join(d.entrypoint, directory, subdirectory, filename)
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Join(d.entrypoint, directory, path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrFileNotFound
@@ -114,15 +110,12 @@ func (d *Disk) Write(data DataInput) (int, error) {
 	return 0, nil
 }
 
-func (d *Disk) Delete(filename, directory, subdirectory string) error {
+func (d *Disk) Delete(directory, path string) error {
 	if directory == "" {
 		return ErrDirectoryRequired
 	}
-	if subdirectory == "" {
-		return ErrSubdirectoryRequired
-	}
 
-	stored := filepath.Join(d.entrypoint, directory, subdirectory, filename)
+	stored := filepath.Join(d.entrypoint, directory, path)
 	if err := os.Remove(stored); err != nil {
 		if os.IsNotExist(err) {
 			return ErrFileNotFound

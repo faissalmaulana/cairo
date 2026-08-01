@@ -22,28 +22,29 @@ go test -run TestSetBucketVisibility ./internal/service/object_storage/  # singl
 cmd/server/main.go          — entrypoint (currently empty main())
 internal/
 ├── helpers/                — validation functions (ValidateOwnerID, ValidateBucketName)
-├── model/metadata.go       — data types (Bucket) and domain errors
-├── repository/metadata/    — MetadataRepository interface + sentinel errors (ErrBucketNotFound, ...)
+├── model/metadata.go       — data types (Bucket, Object, BucketVisibility) and domain errors
+├── repository/metadata/    — MetadataRepository (bucket) + ObjectMetadataRepository (object) interfaces, sentinel errors
 └── service/
-    ├── object_storage/     — bucket business logic (CreateBucket, GetBucket, ListBuckets, DeleteBucket, SetBucketVisibility)
-    └── disk/               — flat file storage (Write, Read, List, Delete)
+    ├── object_storage/     — bucket + object logic (Create/Get/List/DeleteBucket, SetBucketVisibility, Upload/Download/List/DeleteObject)
+    └── disk/               — 2-level subdirectory storage (Write, Read, List, Delete)
 ```
 
-- `MetadataRepository` interface lives in `internal/repository/metadata/`, consumed by `object_storage` service.
+- Both repository interfaces live in `internal/repository/metadata/` (`metadata.go` + `object_metadata.go`), consumed by `object_storage`.
 - `internal/service/object_storage/` uses white-box tests (same package) with testify mocks.
-- `internal/service/disk/` has **two** test files: `disk_test.go` (black-box, package `disk_test`, testify) and `disk_internal_test.go` (white-box, tests private encode/decode helpers).
+- `internal/service/disk/` uses black-box tests (package `disk_test`) with testify.
 
 ## disk service quirks (easy to get wrong)
 
-- **Flat storage, no real subdirectories.** `decodeFilename`/`encodeFilename` map `/` ↔ space. A logical path `avatars/haaland.txt` is stored as the single flat file `avatars haaland.txt` under the directory. `List` only ever sees flat names; it re-encodes spaces back to `/`. Never `MkdirAll` nested filename slashes.
-- **`Write` has a non-standard signature**: `Write(data DataInput) (int, error)` returns `1` on any failure and `0` on success (kept by explicit user request). `Read`/`List`/`Delete` are plain `(..., error)`.
-- **`Read` returns a stream** `(io.ReadCloser, error)` — callers must `Close()` it. It does not read whole files into memory;.
-- **Sentinel errors are exported**: `ErrDirectoryRequired`, `ErrFileNotFound`, `ErrDirectoryNotFound`. Compare with `errors.Is`, don't match strings.
+- **Fixed 2-level layout, real subdirectories.** Files live at `<entrypoint>/<directory>/<subdirectory>/<filename>`; filenames are stored **as-is** (no `/`↔space encoding — the old `decodeFilename`/`encodeFilename` helpers are gone). `Directory` and `Subdirectory` are both required non-empty (`ErrDirectoryRequired`, `ErrSubdirectoryRequired`). Never `MkdirAll` nested slashes inside a filename.
+- **`Write` has a non-standard signature**: `Write(data DataInput) (int, error)` returns `1` on any failure and `0` on success (kept by explicit user request). `Read`/`List`/`Delete` are plain `(..., error)`. `Read`/`Delete` take `(filename, directory, subdirectory)`; `List` takes `(directory, subdirectory)`.
+- **`Read` returns a stream** `(io.ReadCloser, error)` — callers must `Close()` it. It does not read whole files into memory.
+- **Sentinel errors are exported**: `ErrDirectoryRequired`, `ErrSubdirectoryRequired`, `ErrFileNotFound`, `ErrDirectoryNotFound`. Compare with `errors.Is`, don't match strings.
 - Files are written atomically (temp file + `os.Rename`); temp files are removed on failure.
 
-## OpenCode skills (already loaded)
+## object_storage gotchas
 
-`.opencode/skills/golang-*/` — testing, error handling, naming, structs/interfaces, design patterns, code style. Follow their guidance. Note: `.opencode/` is gitignored (skills are local-only, not committed).
+- **Object files are stored by hash, keyed by `Path`.** On upload, `UploadObject` hashes `bucket.ID` → `Subdirectory` and the object key → `Filename` (`helpers.HashName`, hex sha256), writing to `<root>/<ownerID>/<hash(bucketID)>/<hash(key)>`, and stores that relative path in `model.Object.Path`. Download/Delete must not recompute hashes — they `GetObject` and pass `object.Path` verbatim to `disk.Read`/`disk.Delete` along with `ownerID` (no `filepath.Base`/`Dir` splitting anywhere).
+- **Misspelled fields** in `model` (by design, still in use): `Bucket.Visibilty` and `UpdateBucketInput.Visibilty` (missing second "i"), and `Object.Id` (lowercase "d"). Write `Visibility`/`ID` and it won't compile.
 
 ## Conventions
 

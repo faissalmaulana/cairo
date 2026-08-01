@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"regexp"
 )
@@ -20,4 +22,16 @@ func ValidateBucketName(name string) error {
 	}
 
 	return nil
+}
+
+func GenerateSHA256(data []byte) []byte {
+	hash := sha256.Sum256(data)
+	return hash[:]
+}
+
+// HashName returns the hex-encoded sha256 digest of input, suitable for use
+// as a directory or filename on disk.
+func HashName(input string) string {
+	hash := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(hash[:])
 }

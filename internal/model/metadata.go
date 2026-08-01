@@ -23,12 +23,14 @@ type Bucket struct {
 }
 
 type Object struct {
-	Id string
+	ID string
 	// object key
-	BucketName string
-	Key        string
-	Size       int
-	Sha256sum  string
+	BucketID string
+	Key      string
+	// path is the combination of bucketID and key as filepath
+	Path      string
+	Size      int
+	Sha256sum string
 }
 
 type UpdateBucketInput struct {

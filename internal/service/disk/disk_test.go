@@ -139,7 +139,7 @@ func TestRead(t *testing.T) {
 
 	d := disk.NewDisk(entry)
 
-	rc, err := d.Read("haaland.txt", "profile", "avatars")
+	rc, err := d.Read("profile", "avatars/haaland.txt")
 	require.NoError(t, err)
 	defer rc.Close()
 
@@ -154,23 +154,15 @@ func TestReadError(t *testing.T) {
 
 		d := disk.NewDisk(t.TempDir())
 
-		_, err := d.Read("a.txt", "", "sub")
+		_, err := d.Read("", "sub/a.txt")
 		assert.EqualError(t, err, "directory is required")
-	})
-
-	t.Run("fails when subdirectory is empty", func(t *testing.T) {
-
-		d := disk.NewDisk(t.TempDir())
-
-		_, err := d.Read("a.txt", "dir", "")
-		assert.EqualError(t, err, "subdirectory is required")
 	})
 
 	t.Run("fails when file does not exist", func(t *testing.T) {
 
 		d := disk.NewDisk(t.TempDir())
 
-		_, err := d.Read("missing.txt", "dir", "sub")
+		_, err := d.Read("dir", "sub/missing.txt")
 		assert.EqualError(t, err, "file not found")
 	})
 }
@@ -184,7 +176,7 @@ func TestDelete(t *testing.T) {
 
 	d := disk.NewDisk(entry)
 
-	require.NoError(t, d.Delete("haaland.txt", "profile", "avatars"))
+	require.NoError(t, d.Delete("profile", "avatars/haaland.txt"))
 
 	_, err := os.Stat(file)
 	assert.True(t, os.IsNotExist(err))
@@ -196,23 +188,15 @@ func TestDeleteError(t *testing.T) {
 
 		d := disk.NewDisk(t.TempDir())
 
-		err := d.Delete("a.txt", "", "sub")
+		err := d.Delete("", "sub/a.txt")
 		assert.EqualError(t, err, "directory is required")
-	})
-
-	t.Run("fails when subdirectory is empty", func(t *testing.T) {
-
-		d := disk.NewDisk(t.TempDir())
-
-		err := d.Delete("a.txt", "dir", "")
-		assert.EqualError(t, err, "subdirectory is required")
 	})
 
 	t.Run("fails when file does not exist", func(t *testing.T) {
 
 		d := disk.NewDisk(t.TempDir())
 
-		err := d.Delete("haaland.txt", "profile", "avatars")
+		err := d.Delete("profile", "avatars/haaland.txt")
 		assert.EqualError(t, err, "file not found")
 	})
 }

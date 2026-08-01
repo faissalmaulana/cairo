@@ -23,13 +23,13 @@ cmd/server/main.go          — entrypoint (currently empty main())
 internal/
 ├── helpers/                — validation functions (ValidateOwnerID, ValidateBucketName)
 ├── model/metadata.go       — data types (Bucket, Object, BucketVisibility) and domain errors
-├── repository/metadata/    — MetadataRepository (bucket) + ObjectMetadataRepository (object) interfaces, sentinel errors
+├── repository/metadata/    — BucketMetadataRepository (bucket) + ObjectMetadataRepository (object) interfaces, sentinel errors
 └── service/
     ├── object_storage/     — bucket + object logic (Create/Get/List/DeleteBucket, SetBucketVisibility, Upload/Download/List/DeleteObject)
     └── disk/               — 2-level subdirectory storage (Write, Read, List, Delete)
 ```
 
-- Both repository interfaces live in `internal/repository/metadata/` (`metadata.go` + `object_metadata.go`), consumed by `object_storage`.
+- Both repository interfaces live in `internal/repository/metadata/` (`bucket.go` + `object.go`), consumed by `object_storage`.
 - `internal/service/object_storage/` uses white-box tests (same package) with testify mocks.
 - `internal/service/disk/` uses black-box tests (package `disk_test`) with testify.
 

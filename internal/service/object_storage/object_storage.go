@@ -64,14 +64,14 @@ var (
 )
 
 type ObjectStorage struct {
-	metadataDB metadata.MetadataRepository
-	objectDB   metadata.ObjectMetadataRepository
+	bucketDB metadata.BucketMetadataRepository
+	objectDB metadata.ObjectMetadataRepository
 	disk       *disk.Disk
 }
 
-func NewObjectStorage(metadata metadata.MetadataRepository, objectMetadata metadata.ObjectMetadataRepository, disk *disk.Disk) *ObjectStorage {
+func NewObjectStorage(metadata metadata.BucketMetadataRepository, objectMetadata metadata.ObjectMetadataRepository, disk *disk.Disk) *ObjectStorage {
 	return &ObjectStorage{
-		metadataDB: metadata,
+		bucketDB: metadata,
 		objectDB:   objectMetadata,
 		disk:       disk,
 	}
@@ -86,7 +86,7 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 		return "", ErrInvalidBucketName
 	}
 
-	existing, err := oe.metadataDB.GetBucketByName(ctx, newBucket.Name)
+	existing, err := oe.bucketDB.GetBucketByName(ctx, newBucket.Name)
 	if err != nil && !errors.Is(err, metadata.ErrBucketNotFound) {
 		return "", ErrInternal
 	}
@@ -97,7 +97,7 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 		return "", ErrBucketAlreadyExists
 	}
 
-	bucketID, err := oe.metadataDB.CreateBucket(ctx, model.Bucket{
+	bucketID, err := oe.bucketDB.CreateBucket(ctx, model.Bucket{
 		Name:      newBucket.Name,
 		OwnerID:   newBucket.OwnerID,
 		Visibilty: model.Private,
@@ -114,7 +114,7 @@ func (oe *ObjectStorage) GetBucket(ctx context.Context, input GetBucketInput) (*
 		return nil, ErrOwnerIDRequired
 	}
 
-	bucket, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -132,7 +132,7 @@ func (oe *ObjectStorage) ListBuckets(ctx context.Context, ownerID string) ([]mod
 		return nil, ErrOwnerIDRequired
 	}
 
-	buckets, err := oe.metadataDB.ListBuckets(ctx, ownerID)
+	buckets, err := oe.bucketDB.ListBuckets(ctx, ownerID)
 	if err != nil {
 		return nil, ErrInternal
 	}
@@ -145,7 +145,7 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		return ErrOwnerIDRequired
 	}
 
-	_, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
+	_, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -155,7 +155,7 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		}
 	}
 
-	err = oe.metadataDB.DeleteBucket(ctx, input.Name, input.OwnerID)
+	err = oe.bucketDB.DeleteBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		return ErrInternal
 	}
@@ -168,7 +168,7 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 		return ErrOwnerIDRequired
 	}
 
-	_, err := oe.metadataDB.GetBucket(ctx, input.Name, input.OwnerID)
+	_, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -178,7 +178,7 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 		}
 	}
 
-	err = oe.metadataDB.UpdateBucket(ctx, input.Name, input.OwnerID, model.UpdateBucketInput{
+	err = oe.bucketDB.UpdateBucket(ctx, input.Name, input.OwnerID, model.UpdateBucketInput{
 		Visibilty: &input.Visibilty,
 	})
 	if err != nil {
@@ -204,7 +204,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		return "", ErrOwnerIDRequired
 	}
 
-	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, input.BucketName, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -240,8 +240,8 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	return objectID, nil
 }
 
-func (oe *ObjectStorage) DownloadObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, error) {
-	buck, err := oe.metadataDB.GetBucketByName(ctx, input.BucketName)
+func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, error) {
+	buck, err := oe.bucketDB.GetBucketByName(ctx, input.BucketName)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -283,7 +283,7 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		return nil, ErrOwnerIDRequired
 	}
 
-	bucket, err := oe.metadataDB.GetBucket(ctx, bucketName, ownerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, bucketName, ownerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -306,7 +306,7 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		return ErrOwnerIDRequired
 	}
 
-	bucket, err := oe.metadataDB.GetBucket(ctx, input.BucketName, input.OwnerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, input.BucketName, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):

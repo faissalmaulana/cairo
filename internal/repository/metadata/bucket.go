@@ -7,7 +7,7 @@ import (
 	"github.com/faissalmaulana/cairo/internal/model"
 )
 
-type MetadataRepository interface {
+type BucketMetadataRepository interface {
 	CreateBucket(ctx context.Context, newBucket model.Bucket) (string, error)
 	GetBucket(ctx context.Context, name string, ownerID string) (model.Bucket, error)
 	GetBucketByName(ctx context.Context, name string) (model.Bucket, error)

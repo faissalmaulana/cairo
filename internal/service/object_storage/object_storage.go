@@ -283,7 +283,8 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		return nil, ErrOwnerIDRequired
 	}
 
-	if _, err := oe.metadataDB.GetBucket(ctx, bucketName, ownerID); err != nil {
+	bucket, err := oe.metadataDB.GetBucket(ctx, bucketName, ownerID)
+	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return nil, ErrBucketNotFound
@@ -292,8 +293,7 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		}
 	}
 
-	// TODO: get from bucket ID
-	objects, err := oe.objectDB.ListObjects(ctx, bucketName, ownerID)
+	objects, err := oe.objectDB.ListObjects(ctx, bucket.ID, ownerID)
 	if err != nil {
 		return nil, ErrInternal
 	}
@@ -326,13 +326,11 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		}
 	}
 
-	// TODO: just find from object path
 	if err := oe.disk.Delete(input.OwnerID, object.Path); err != nil {
 		return ErrInternal
 	}
 
-	// TODO: get from bucketID
-	if err := oe.objectDB.DeleteObject(ctx, input.BucketName, input.OwnerID, input.Name); err != nil {
+	if err := oe.objectDB.DeleteObject(ctx, bucket.ID, input.OwnerID, input.Name); err != nil {
 		return ErrInternal
 	}
 

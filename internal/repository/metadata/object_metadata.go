@@ -10,8 +10,8 @@ import (
 type ObjectMetadataRepository interface {
 	CreateObject(ctx context.Context, object model.Object) (string, error)
 	GetObject(ctx context.Context, bucketID, ownerID, name string) (model.Object, error)
-	ListObjects(ctx context.Context, bucketName, ownerID string) ([]model.Object, error)
-	DeleteObject(ctx context.Context, bucketName, ownerID, name string) error
+	ListObjects(ctx context.Context, bucketID, ownerID string) ([]model.Object, error)
+	DeleteObject(ctx context.Context, bucketID, ownerID, name string) error
 }
 
 var (

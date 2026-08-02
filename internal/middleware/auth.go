@@ -2,18 +2,18 @@ package middleware
 
 import (
 	"github.com/faissalmaulana/cairo/internal/handler"
-	user_service "github.com/faissalmaulana/cairo/internal/service/user"
+	"github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthMiddleware struct {
-	usrService *user_service.UserService
+	userService *user_service.UserService
 }
 
-func NewAuthMiddleware(usrService *user_service.UserService) *AuthMiddleware {
+func NewAuthMiddleware(userService *user_service.UserService) *AuthMiddleware {
 	return &AuthMiddleware{
-		usrService: usrService,
+		userService: userService,
 	}
 }
 
@@ -28,7 +28,7 @@ func (am *AuthMiddleware) CheckAuth(c *gin.Context) {
 
 	usrEmail := user.(string)
 
-	if isexist, err := am.usrService.CheckUserByEmail(c.Request.Context(), usrEmail); err != nil || !isexist {
+	if isexist, err := am.userService.EmailExists(c.Request.Context(), usrEmail); err != nil || !isexist {
 		if err != nil {
 			handler.FailError(c, handler.ErrInternalServer)
 			c.Abort()

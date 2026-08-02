@@ -3,18 +3,18 @@ package handler
 import (
 	"net/http"
 
-	user_service "github.com/faissalmaulana/cairo/internal/service/user"
+	"github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
-type UserResource struct {
-	usrService *user_service.UserService
+type UserHandler struct {
+	userService *user_service.UserService
 }
 
-func NewUserResource(usrService *user_service.UserService) *UserResource {
-	return &UserResource{
-		usrService: usrService,
+func NewUserHandler(userService *user_service.UserService) *UserHandler {
+	return &UserHandler{
+		userService: userService,
 	}
 }
 
@@ -24,14 +24,14 @@ type SignUpRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (ur *UserResource) SignUp(c *gin.Context) {
+func (ur *UserHandler) SignUp(c *gin.Context) {
 	var signUp SignUpRequest
 	if err := c.ShouldBindJSON(&signUp); err != nil {
 		FailError(c, ErrInvalidBodyRequest)
 		return
 	}
 
-	if err := ur.usrService.Create(c.Request.Context(), user_service.NewUser(signUp)); err != nil {
+	if err := ur.userService.Create(c.Request.Context(), user_service.SignUpInput(signUp)); err != nil {
 		FailError(c, ErrSignUpFailed)
 		return
 	}
@@ -52,7 +52,7 @@ type SignInRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (ur *UserResource) SignIn(c *gin.Context) {
+func (ur *UserHandler) SignIn(c *gin.Context) {
 	var signIn SignInRequest
 
 	if err := c.ShouldBindJSON(&signIn); err != nil {
@@ -60,7 +60,7 @@ func (ur *UserResource) SignIn(c *gin.Context) {
 		return
 	}
 
-	isVerified, err := ur.usrService.VerifyPassword(c.Request.Context(), signIn.Email, signIn.Password)
+	isVerified, err := ur.userService.VerifyPassword(c.Request.Context(), signIn.Email, signIn.Password)
 	if err != nil {
 		FailError(c, ErrInvalidCredentials)
 		return
@@ -83,10 +83,10 @@ type UserResponse struct {
 	Email    string `json:"email"`
 }
 
-func (ur *UserResource) Account(c *gin.Context) {
+func (ur *UserHandler) Account(c *gin.Context) {
 	authenticatedUserEmail := c.GetString("auth_user")
 
-	user, err := ur.usrService.GetUserByEmail(c.Request.Context(), authenticatedUserEmail)
+	user, err := ur.userService.GetByEmail(c.Request.Context(), authenticatedUserEmail)
 	if err != nil {
 		FailError(c, ErrInternalServer)
 		return
@@ -99,7 +99,7 @@ func (ur *UserResource) Account(c *gin.Context) {
 	})
 }
 
-func (ur *UserResource) Logout(c *gin.Context) {
+func (ur *UserHandler) Logout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
 	session.Options(sessions.Options{Path: "/", MaxAge: -1})

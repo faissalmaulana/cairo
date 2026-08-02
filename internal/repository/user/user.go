@@ -11,21 +11,21 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, newUsr model.User) error
 	GetPasswordByEmail(ctx context.Context, email string) (string, error)
-	FindUserByEmail(ctx context.Context, email string) (bool, error)
+	EmailExists(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
 }
 
-type UserDB struct {
+type SQLiteUserRepository struct {
 	db *sql.DB
 }
 
-func NewUserDB(db *sql.DB) *UserDB {
-	return &UserDB{
+func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
+	return &SQLiteUserRepository{
 		db: db,
 	}
 }
 
-func (ud *UserDB) Create(ctx context.Context, newUsr model.User) error {
+func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) error {
 	query := `INSERT INTO users(username,email,password,createdAt) VALUES(?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -42,7 +42,7 @@ func (ud *UserDB) Create(ctx context.Context, newUsr model.User) error {
 
 	return err
 }
-func (ud *UserDB) GetPasswordByEmail(ctx context.Context, email string) (string, error) {
+func (ud *SQLiteUserRepository) GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 
 	query := `SELECT password FROM users WHERE email=?`
 
@@ -55,7 +55,7 @@ func (ud *UserDB) GetPasswordByEmail(ctx context.Context, email string) (string,
 	return resultRow, err
 }
 
-func (ud *UserDB) FindUserByEmail(ctx context.Context, email string) (bool, error) {
+func (ud *SQLiteUserRepository) EmailExists(ctx context.Context, email string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email=?) `
 
 	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -68,7 +68,7 @@ func (ud *UserDB) FindUserByEmail(ctx context.Context, email string) (bool, erro
 
 }
 
-func (ud *UserDB) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (ud *SQLiteUserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `SELECT id,username,email FROM users WHERE email = ?`
 
 	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)

@@ -16,14 +16,14 @@ import (
 )
 
 type Application struct {
-	userHandler    *handler.UserResource
+	userHandler    *handler.UserHandler
 	authMiddleware *middleware.AuthMiddleware
 	sessionStore   sessions.Store
 }
 
-func New(usrHandler *handler.UserResource, authMiddleware *middleware.AuthMiddleware, sessStore sessions.Store) *Application {
+func New(userHandler *handler.UserHandler, authMiddleware *middleware.AuthMiddleware, sessStore sessions.Store) *Application {
 	return &Application{
-		userHandler:    usrHandler,
+		userHandler:    userHandler,
 		authMiddleware: authMiddleware,
 		sessionStore:   sessStore,
 	}

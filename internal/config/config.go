@@ -16,7 +16,7 @@ type DBConfig struct {
 	ConnMaxIdleTime time.Duration
 }
 
-func NewDB(cfg DBConfig) (*sql.DB, error) {
+func OpenDB(cfg DBConfig) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)

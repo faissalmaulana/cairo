@@ -5,28 +5,28 @@ import (
 	"errors"
 
 	"github.com/faissalmaulana/cairo/internal/model"
-	userRepository "github.com/faissalmaulana/cairo/internal/repository/user"
+	"github.com/faissalmaulana/cairo/internal/repository/user"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
-	UsrRepo userRepository.UserRepository
+	repo user_repository.UserRepository
 }
 
-func NewUserService(usrrepo userRepository.UserRepository) *UserService {
+func NewUserService(repo user_repository.UserRepository) *UserService {
 	return &UserService{
-		UsrRepo: usrrepo,
+		repo: repo,
 	}
 }
 
-type NewUser struct {
+type SignUpInput struct {
 	Username string
 	Email    string
 	Password string
 }
 
-func (us *UserService) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
-	user, err := us.UsrRepo.GetByEmail(ctx, email)
+func (us *UserService) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	user, err := us.repo.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (us *UserService) GetUserByEmail(ctx context.Context, email string) (*model
 	return user, nil
 }
 
-func (us *UserService) Create(ctx context.Context, nu NewUser) error {
+func (us *UserService) Create(ctx context.Context, nu SignUpInput) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(nu.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (us *UserService) Create(ctx context.Context, nu NewUser) error {
 		Password: string(hashedPassword),
 	}
 
-	if err := us.UsrRepo.Create(ctx, newUser); err != nil {
+	if err := us.repo.Create(ctx, newUser); err != nil {
 		return errors.New("can't create new user")
 	}
 
@@ -54,7 +54,7 @@ func (us *UserService) Create(ctx context.Context, nu NewUser) error {
 }
 
 func (us *UserService) VerifyPassword(ctx context.Context, email, password string) (bool, error) {
-	pass, err := us.UsrRepo.GetPasswordByEmail(ctx, email)
+	pass, err := us.repo.GetPasswordByEmail(ctx, email)
 	if err != nil {
 		return false, errors.New("can't find password")
 	}
@@ -66,9 +66,9 @@ func (us *UserService) VerifyPassword(ctx context.Context, email, password strin
 	return true, nil
 }
 
-func (us *UserService) CheckUserByEmail(ctx context.Context, email string) (bool, error) {
+func (us *UserService) EmailExists(ctx context.Context, email string) (bool, error) {
 
-	isExist, err := us.UsrRepo.FindUserByEmail(ctx, email)
+	isExist, err := us.repo.EmailExists(ctx, email)
 	if err != nil {
 		return false, errors.New("something went wrong")
 	}

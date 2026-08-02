@@ -9,13 +9,13 @@ import (
 	"github.com/faissalmaulana/cairo/internal/config"
 	"github.com/faissalmaulana/cairo/internal/handler"
 	"github.com/faissalmaulana/cairo/internal/middleware"
-	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
-	user_service "github.com/faissalmaulana/cairo/internal/service/user"
+	"github.com/faissalmaulana/cairo/internal/repository/user"
+	"github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/gin-contrib/sessions/filesystem"
 )
 
 func main() {
-	db, err := config.NewDB(config.DBConfig{
+	db, err := config.OpenDB(config.DBConfig{
 		DSN:             "./database/foo.db",
 		MaxOpenConns:    25,
 		MaxIdleConns:    5,
@@ -36,13 +36,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	userRepo := user_repository.NewUserDB(db)
+	userRepo := user_repository.NewSQLiteUserRepository(db)
 	userSvc := user_service.NewUserService(userRepo)
 
-	userResource := handler.NewUserResource(userSvc)
+	userHandler := handler.NewUserHandler(userSvc)
 	authMiddleware := middleware.NewAuthMiddleware(userSvc)
 
 	sessionStore := filesystem.NewStore("./database/sessions", []byte("hello,world"))
-	app := app.New(userResource, authMiddleware, sessionStore)
+	app := app.New(userHandler, authMiddleware, sessionStore)
 	app.Run()
 }

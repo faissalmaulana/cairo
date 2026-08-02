@@ -40,7 +40,7 @@ func (app *Application) mux() http.Handler {
 	router.POST("/signin", app.userHandler.SignIn)
 
 	router.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
-	router.GET("/logout", app.authMiddleware.CheckAuth, app.userHandler.Logout)
+	router.GET("/logout", app.userHandler.Logout)
 
 	return router
 }

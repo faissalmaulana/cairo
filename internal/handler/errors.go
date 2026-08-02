@@ -24,11 +24,19 @@ func FailError(c *gin.Context, err *Error) {
 	Fail(c, err.Status, err.Code, err.Message)
 }
 
+func ErrValidation(err error) *Error {
+	message := "invalid body request"
+	if err != nil {
+		message = err.Error()
+	}
+	return NewError(http.StatusBadRequest, "BAD_REQUEST", message)
+}
+
 var (
-	ErrInvalidBodyRequest = NewError(http.StatusBadRequest, "BAD_REQUEST", "invalid body request")
 	ErrInvalidCredentials = NewError(http.StatusUnauthorized, "INVALID", "email or password incorrect")
 	ErrRequiredSignIn     = NewError(http.StatusUnauthorized, "INVALID", "required sign in")
 	ErrInternalServer     = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong")
 	ErrSignUpFailed       = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong during sign up")
 	ErrLogoutFailed       = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong during logout")
+	ErrEmailAlreadyExists = NewError(http.StatusConflict, "EMAIL_EXISTS", "email already registered")
 )

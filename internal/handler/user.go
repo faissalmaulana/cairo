@@ -19,15 +19,25 @@ func NewUserHandler(userService *user_service.UserService) *UserHandler {
 }
 
 type SignUpRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username" binding:"required,min=3,max=30"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 }
 
 func (ur *UserHandler) SignUp(c *gin.Context) {
 	var signUp SignUpRequest
 	if err := c.ShouldBindJSON(&signUp); err != nil {
-		FailError(c, ErrInvalidBodyRequest)
+		FailError(c, ErrValidation(err))
+		return
+	}
+
+	exists, err := ur.userService.EmailExists(c.Request.Context(), signUp.Email)
+	if err != nil {
+		FailError(c, ErrInternalServer)
+		return
+	}
+	if exists {
+		FailError(c, ErrEmailAlreadyExists)
 		return
 	}
 
@@ -48,7 +58,7 @@ func (ur *UserHandler) SignUp(c *gin.Context) {
 }
 
 type SignInRequest struct {
-	Email    string `json:"email" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -56,7 +66,7 @@ func (ur *UserHandler) SignIn(c *gin.Context) {
 	var signIn SignInRequest
 
 	if err := c.ShouldBindJSON(&signIn); err != nil {
-		FailError(c, ErrInvalidBodyRequest)
+		FailError(c, ErrValidation(err))
 		return
 	}
 

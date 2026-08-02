@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/faissalmaulana/cairo/internal/model"
+	"github.com/faissalmaulana/cairo/internal/variables"
 )
 
 type UserRepository interface {
@@ -28,7 +29,7 @@ func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
 func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) error {
 	query := `INSERT INTO users(username,email,password,createdAt) VALUES(?,?,?,?)`
 
-	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
 	_, err := ud.db.ExecContext(
@@ -46,7 +47,7 @@ func (ud *SQLiteUserRepository) GetPasswordByEmail(ctx context.Context, email st
 
 	query := `SELECT password FROM users WHERE email=?`
 
-	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
 	var resultRow string
@@ -58,7 +59,7 @@ func (ud *SQLiteUserRepository) GetPasswordByEmail(ctx context.Context, email st
 func (ud *SQLiteUserRepository) EmailExists(ctx context.Context, email string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email=?) `
 
-	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
 	var exist bool
@@ -71,7 +72,7 @@ func (ud *SQLiteUserRepository) EmailExists(ctx context.Context, email string) (
 func (ud *SQLiteUserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `SELECT id,username,email FROM users WHERE email = ?`
 
-	queryctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
 	var user model.User

@@ -16,16 +16,26 @@ import (
 )
 
 type Application struct {
-	userHandler    *handler.UserHandler
-	authMiddleware *middleware.AuthMiddleware
-	sessionStore   sessions.Store
+	userHandler        *handler.UserHandler
+	authMiddleware     *middleware.AuthMiddleware
+	sessionStore       sessions.Store
+	addr               string
+	readHeaderTimeout  time.Duration
+	readTimeout        time.Duration
+	writeTimeout       time.Duration
+	idleTimeout        time.Duration
 }
 
-func New(userHandler *handler.UserHandler, authMiddleware *middleware.AuthMiddleware, sessStore sessions.Store) *Application {
+func New(userHandler *handler.UserHandler, authMiddleware *middleware.AuthMiddleware, sessStore sessions.Store, addr string, readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration) *Application {
 	return &Application{
-		userHandler:    userHandler,
-		authMiddleware: authMiddleware,
-		sessionStore:   sessStore,
+		userHandler:        userHandler,
+		authMiddleware:     authMiddleware,
+		sessionStore:       sessStore,
+		addr:               addr,
+		readHeaderTimeout:  readHeaderTimeout,
+		readTimeout:        readTimeout,
+		writeTimeout:       writeTimeout,
+		idleTimeout:        idleTimeout,
 	}
 }
 
@@ -48,8 +58,12 @@ func (app *Application) mux() http.Handler {
 func (app *Application) Run() {
 
 	srv := &http.Server{
-		Addr:    "localhost:8080",
-		Handler: app.mux(),
+		Addr:              app.addr,
+		Handler:           app.mux(),
+		ReadHeaderTimeout: app.readHeaderTimeout,
+		ReadTimeout:       app.readTimeout,
+		WriteTimeout:      app.writeTimeout,
+		IdleTimeout:       app.idleTimeout,
 	}
 
 	go func() {

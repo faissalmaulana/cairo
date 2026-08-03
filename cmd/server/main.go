@@ -33,11 +33,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// Verify the connection is alive
-	if err := db.Ping(); err != nil {
-		log.Fatal(err)
-	}
-
 	sessionPath := helpers.GetEnv("SESSION_PATH", "./database/sessions")
 	if err := os.MkdirAll(sessionPath, 0o755); err != nil {
 		log.Fatal(err)
@@ -60,6 +55,8 @@ func main() {
 		helpers.GetEnvDuration("SERVER_WRITE_TIMEOUT", 10*time.Second),
 		helpers.GetEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
 		helpers.GetEnv("SERVER_MODE", "development"),
+		&handler.DependenciesHealth{DB: db},
+		helpers.GetEnv("HEALTH_ADDR", "localhost:8081"),
 	)
 	app.Run()
 }

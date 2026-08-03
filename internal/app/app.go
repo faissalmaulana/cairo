@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,6 +27,8 @@ type Application struct {
 	writeTimeout      time.Duration
 	idleTimeout       time.Duration
 	mode              string
+	health            handler.HealthChecker
+	healthAddr        string
 }
 
 func New(
@@ -35,6 +38,8 @@ func New(
 	addr string,
 	readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration,
 	mode string,
+	health handler.HealthChecker,
+	healthAddr string,
 ) *Application {
 
 	return &Application{
@@ -47,6 +52,8 @@ func New(
 		writeTimeout:      writeTimeout,
 		idleTimeout:       idleTimeout,
 		mode:              mode,
+		health:            health,
+		healthAddr:        healthAddr,
 	}
 }
 
@@ -82,8 +89,13 @@ func goodModeToGinMode(mode string) string {
 	}
 }
 
-func (app *Application) Run() {
+func (app *Application) healthMux() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/healthz", app.health)
+	return mux
+}
 
+func (app *Application) Run() {
 	srv := &http.Server{
 		Addr:              app.addr,
 		Handler:           app.mux(),
@@ -93,15 +105,33 @@ func (app *Application) Run() {
 		IdleTimeout:       app.idleTimeout,
 	}
 
+	healthSrv := &http.Server{
+		Addr:              app.healthAddr,
+		Handler:           app.healthMux(),
+		ReadHeaderTimeout: app.readHeaderTimeout,
+		IdleTimeout:       app.idleTimeout,
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
-		// service connections
+		defer wg.Done()
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			log.Fatalf("listen %s: %v", srv.Addr, err)
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
+	go func() {
+		defer wg.Done()
+		log.Printf("starting health server on %s", healthSrv.Addr)
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("health listen %s: %v", healthSrv.Addr, err)
+		}
+		log.Printf("health server on %s stopped", healthSrv.Addr)
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the servers.
 	quit := make(chan os.Signal, 1)
 	// kill (no params) by default sends syscall.SIGTERM
 	// kill -2 is syscall.SIGINT
@@ -112,9 +142,17 @@ func (app *Application) Run() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Println("Server Shutdown:", err)
-	}
 
-	log.Println("Server exiting")
+	shutdown := func(s *http.Server, name string) {
+		log.Printf("shutting down %s", name)
+		if err := s.Shutdown(ctx); err != nil {
+			log.Printf("%s shutdown: %v", name, err)
+		}
+		log.Printf("%s closed", name)
+	}
+	shutdown(srv, "server")
+	shutdown(healthSrv, "health server")
+
+	wg.Wait()
+	log.Println("Servers exiting")
 }

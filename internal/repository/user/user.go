@@ -40,7 +40,7 @@ func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) e
 		newUsr.Username,
 		newUsr.Email,
 		newUsr.Password,
-		time.Now(),
+		time.Now().UTC(),
 	)
 
 	return err

@@ -38,5 +38,5 @@ var (
 	ErrInternalServer     = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong")
 	ErrSignUpFailed       = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong during sign up")
 	ErrLogoutFailed       = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong during logout")
-	ErrEmailAlreadyExists = NewError(http.StatusConflict, "EMAIL_EXISTS", "email already registered")
+	ErrEmailAlreadyExists = NewError(http.StatusConflict, "EMAIL_EXISTS", "email is not available")
 )

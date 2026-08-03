@@ -10,8 +10,8 @@ import (
 	"github.com/faissalmaulana/cairo/internal/handler"
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/middleware"
-	"github.com/faissalmaulana/cairo/internal/repository/user"
-	"github.com/faissalmaulana/cairo/internal/service/user"
+	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
+	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/gin-contrib/sessions/filesystem"
 	"github.com/joho/godotenv"
 )
@@ -49,7 +49,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	authMiddleware := middleware.NewAuthMiddleware(userSvc)
 
-	sessionStore := filesystem.NewStore(sessionPath, []byte(helpers.GetEnv("SESSION_SECRET", "hello,world")))
+	sessionStore := filesystem.NewStore(sessionPath, []byte(helpers.GetEnv("SESSION_SECRET", "")))
 	app := app.New(
 		userHandler,
 		authMiddleware,

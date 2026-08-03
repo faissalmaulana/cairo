@@ -22,7 +22,7 @@ func main() {
 	}
 
 	db, err := config.OpenDB(config.DBConfig{
-		DSN:             helpers.GetEnv("DB_DSN", "./database/foo.db"),
+		DSN:             helpers.GetEnv("DB_DSN", ""),
 		MaxOpenConns:    helpers.GetEnvInt("DB_MAX_OPEN_CONNS", 25),
 		MaxIdleConns:    helpers.GetEnvInt("DB_MAX_IDLE_CONNS", 5),
 		ConnMaxLifetime: helpers.GetEnvDuration("DB_CONN_MAX_LIFETIME", time.Hour),

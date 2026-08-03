@@ -17,7 +17,7 @@ type DBConfig struct {
 }
 
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", cfg.DSN)
+	db, err := sql.Open("sqlite", cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

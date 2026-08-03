@@ -16,26 +16,33 @@ import (
 )
 
 type Application struct {
-	userHandler        *handler.UserHandler
-	authMiddleware     *middleware.AuthMiddleware
-	sessionStore       sessions.Store
-	addr               string
-	readHeaderTimeout  time.Duration
-	readTimeout        time.Duration
-	writeTimeout       time.Duration
-	idleTimeout        time.Duration
+	userHandler       *handler.UserHandler
+	authMiddleware    *middleware.AuthMiddleware
+	sessionStore      sessions.Store
+	addr              string
+	readHeaderTimeout time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	idleTimeout       time.Duration
 }
 
-func New(userHandler *handler.UserHandler, authMiddleware *middleware.AuthMiddleware, sessStore sessions.Store, addr string, readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration) *Application {
+func New(
+	userHandler *handler.UserHandler,
+	authMiddleware *middleware.AuthMiddleware,
+	sessStore sessions.Store,
+	addr string,
+	readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration,
+) *Application {
+
 	return &Application{
-		userHandler:        userHandler,
-		authMiddleware:     authMiddleware,
-		sessionStore:       sessStore,
-		addr:               addr,
-		readHeaderTimeout:  readHeaderTimeout,
-		readTimeout:        readTimeout,
-		writeTimeout:       writeTimeout,
-		idleTimeout:        idleTimeout,
+		userHandler:       userHandler,
+		authMiddleware:    authMiddleware,
+		sessionStore:      sessStore,
+		addr:              addr,
+		readHeaderTimeout: readHeaderTimeout,
+		readTimeout:       readTimeout,
+		writeTimeout:      writeTimeout,
+		idleTimeout:       idleTimeout,
 	}
 }
 
@@ -44,13 +51,14 @@ func (app *Application) mux() http.Handler {
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
 
-	router.Use(sessions.Sessions("authentication_session", app.sessionStore))
-
-	router.POST("/signup", app.userHandler.SignUp)
-	router.POST("/signin", app.userHandler.SignIn)
-
-	router.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
-	router.GET("/logout", app.userHandler.Logout)
+	v1 := router.Group("/api/v1")
+	{
+		v1.Use(sessions.Sessions("authentication_session", app.sessionStore))
+		v1.POST("/signup", app.userHandler.SignUp)
+		v1.POST("/signin", app.userHandler.SignIn)
+		v1.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
+		v1.GET("/logout", app.userHandler.Logout)
+	}
 
 	return router
 }

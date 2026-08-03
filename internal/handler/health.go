@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type HealthChecker interface {
@@ -13,7 +15,8 @@ type HealthChecker interface {
 }
 
 type DependenciesHealth struct {
-	DB *sql.DB
+	DB    *sql.DB
+	Redis *redis.Client
 }
 
 func (dh *DependenciesHealth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,6 +31,14 @@ func (dh *DependenciesHealth) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		healthy = false
 	} else {
 		checks["database"] = map[string]any{"status": "healthy"}
+	}
+
+	// Check Redis
+	if err := dh.Redis.Ping(ctx).Err(); err != nil {
+		checks["redis"] = map[string]any{"status": "unhealthy", "error": err.Error()}
+		healthy = false
+	} else {
+		checks["redis"] = map[string]any{"status": "healthy"}
 	}
 
 	status := http.StatusOK

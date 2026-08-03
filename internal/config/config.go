@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	_ "modernc.org/sqlite"
 )
 
@@ -32,4 +33,21 @@ func OpenDB(cfg DBConfig) (*sql.DB, error) {
 	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
 
 	return db, nil
+}
+
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+	Protocol int
+}
+
+func NewRedis(rcg RedisConfig) (*redis.Client, error) {
+
+	return redis.NewClient(&redis.Options{
+		Addr:     rcg.Addr,
+		Password: rcg.Password,
+		DB:       rcg.DB,
+		Protocol: rcg.Protocol,
+	}), nil
 }

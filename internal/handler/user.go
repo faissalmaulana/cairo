@@ -88,7 +88,7 @@ func (ur *UserHandler) SignIn(c *gin.Context) {
 }
 
 type UserResponse struct {
-	ID       int    `json:"id"`
+	ID       string `json:"id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
 }

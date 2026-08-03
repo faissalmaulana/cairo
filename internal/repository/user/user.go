@@ -7,6 +7,7 @@ import (
 
 	"github.com/faissalmaulana/cairo/internal/model"
 	"github.com/faissalmaulana/cairo/internal/variables"
+	"github.com/google/uuid"
 )
 
 type UserRepository interface {
@@ -27,7 +28,7 @@ func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
 }
 
 func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) error {
-	query := `INSERT INTO users(username,email,password,createdAt) VALUES(?,?,?,?)`
+	query := `INSERT INTO users(id,username,email,password,createdAt) VALUES(?,?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -35,6 +36,7 @@ func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) e
 	_, err := ud.db.ExecContext(
 		queryctx,
 		query,
+		uuid.NewString(),
 		newUsr.Username,
 		newUsr.Email,
 		newUsr.Password,

@@ -70,7 +70,7 @@ func (app *Application) mux() http.Handler {
 		v1.POST("/signup", app.userHandler.SignUp)
 		v1.POST("/signin", app.userHandler.SignIn)
 		v1.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
-		v1.GET("/logout", app.userHandler.Logout)
+		v1.GET("/logout", app.authMiddleware.CheckAuth, app.userHandler.Logout)
 	}
 
 	return router

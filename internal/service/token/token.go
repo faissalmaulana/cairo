@@ -24,6 +24,9 @@ const (
 	audience    = "cairo-api"
 	denylistKey = "denylist:%s"
 	refreshKey  = "refresh:%s"
+
+	TypeAccess  = "access"
+	TypeRefresh = "refresh"
 )
 
 type TokenService struct {
@@ -43,12 +46,14 @@ func NewTokenService(secret string, accessTTL, refreshTTL time.Duration, rdb *re
 }
 
 type Claims struct {
+	Type string
 	jwt.RegisteredClaims
 }
 
-func (ts *TokenService) newToken(userID string, ttl time.Duration) (string, *Claims, error) {
+func (ts *TokenService) newToken(tokenType, userID string, ttl time.Duration) (string, *Claims, error) {
 	now := time.Now()
 	claims := &Claims{
+		Type: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			Issuer:    issuer,
@@ -69,18 +74,18 @@ func (ts *TokenService) newToken(userID string, ttl time.Duration) (string, *Cla
 }
 
 func (ts *TokenService) GenerateAccessToken(userID string) (string, *Claims, error) {
-	return ts.newToken(userID, ts.accessTTL)
+	return ts.newToken(TypeAccess, userID, ts.accessTTL)
 }
 
 func (ts *TokenService) GenerateRefreshToken(userID string) (string, *Claims, error) {
-	return ts.newToken(userID, ts.refreshTTL)
+	return ts.newToken(TypeRefresh, userID, ts.refreshTTL)
 }
 
 func (ts *TokenService) AccessTTL() time.Duration { return ts.accessTTL }
 
 func (ts *TokenService) RefreshTTL() time.Duration { return ts.refreshTTL }
 
-func (ts *TokenService) parse(raw string) (*Claims, error) {
+func (ts *TokenService) parse(raw, expectedType string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(raw, &Claims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -99,15 +104,19 @@ func (ts *TokenService) parse(raw string) (*Claims, error) {
 		return nil, ErrInvalidToken
 	}
 
+	if claims.Type != expectedType {
+		return nil, ErrInvalidToken
+	}
+
 	return claims, nil
 }
 
 func (ts *TokenService) ParseAccessToken(raw string) (*Claims, error) {
-	return ts.parse(raw)
+	return ts.parse(raw, TypeAccess)
 }
 
 func (ts *TokenService) ParseRefreshToken(raw string) (*Claims, error) {
-	return ts.parse(raw)
+	return ts.parse(raw, TypeRefresh)
 }
 
 func (ts *TokenService) ExtractJTI(raw string) (string, error) {

@@ -59,6 +59,7 @@ func main() {
 		helpers.GetEnvDuration("SERVER_READ_TIMEOUT", 10*time.Second),
 		helpers.GetEnvDuration("SERVER_WRITE_TIMEOUT", 10*time.Second),
 		helpers.GetEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+		helpers.GetEnv("SERVER_MODE", "development"),
 	)
 	app.Run()
 }

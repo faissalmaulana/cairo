@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ type Application struct {
 	readTimeout       time.Duration
 	writeTimeout      time.Duration
 	idleTimeout       time.Duration
+	mode              string
 }
 
 func New(
@@ -32,6 +34,7 @@ func New(
 	sessStore sessions.Store,
 	addr string,
 	readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration,
+	mode string,
 ) *Application {
 
 	return &Application{
@@ -43,11 +46,14 @@ func New(
 		readTimeout:       readTimeout,
 		writeTimeout:      writeTimeout,
 		idleTimeout:       idleTimeout,
+		mode:              mode,
 	}
 }
 
 func (app *Application) mux() http.Handler {
 	gin.DisableConsoleColor()
+	gin.SetMode(goodModeToGinMode(app.mode))
+
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
 
@@ -61,6 +67,19 @@ func (app *Application) mux() http.Handler {
 	}
 
 	return router
+}
+
+// goodModeToGinMode maps the app's mode string to a gin mode constant,
+// defaulting to debug for development/unknown values.
+func goodModeToGinMode(mode string) string {
+	switch strings.ToLower(mode) {
+	case gin.ReleaseMode, "prod", "production":
+		return gin.ReleaseMode
+	case gin.TestMode:
+		return gin.TestMode
+	default: // dev, development, "" and anything else
+		return gin.DebugMode
+	}
 }
 
 func (app *Application) Run() {

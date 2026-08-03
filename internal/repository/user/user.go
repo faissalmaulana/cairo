@@ -11,10 +11,11 @@ import (
 )
 
 type UserRepository interface {
-	Create(ctx context.Context, newUsr model.User) error
+	Create(ctx context.Context, newUsr model.User) (string, error)
 	GetPasswordByEmail(ctx context.Context, email string) (string, error)
 	EmailExists(ctx context.Context, email string) (bool, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	GetByID(ctx context.Context, id string) (*model.User, error)
 }
 
 type SQLiteUserRepository struct {
@@ -27,7 +28,8 @@ func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
 	}
 }
 
-func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) error {
+func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) (string, error) {
+	id := uuid.NewString()
 	query := `INSERT INTO users(id,username,email,password,createdAt) VALUES(?,?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
@@ -36,14 +38,14 @@ func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) e
 	_, err := ud.db.ExecContext(
 		queryctx,
 		query,
-		uuid.NewString(),
+		id,
 		newUsr.Username,
 		newUsr.Email,
 		newUsr.Password,
 		time.Now().UTC(),
 	)
 
-	return err
+	return id, err
 }
 func (ud *SQLiteUserRepository) GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 
@@ -80,6 +82,26 @@ func (ud *SQLiteUserRepository) GetByEmail(ctx context.Context, email string) (*
 	var user model.User
 
 	err := ud.db.QueryRowContext(queryctx, query, email).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+	)
+
+	defer cancel()
+
+	return &user, err
+
+}
+
+func (ud *SQLiteUserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
+	query := `SELECT id,username,email FROM users WHERE id = ?`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	var user model.User
+
+	err := ud.db.QueryRowContext(queryctx, query, id).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Email,

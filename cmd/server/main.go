@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"github.com/faissalmaulana/cairo/internal/app"
@@ -11,8 +10,8 @@ import (
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/middleware"
 	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
+	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
-	"github.com/gin-contrib/sessions/filesystem"
 	"github.com/joho/godotenv"
 )
 
@@ -43,22 +42,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sessionPath := helpers.GetEnv("SESSION_PATH", "./database/sessions")
-	if err := os.MkdirAll(sessionPath, 0o755); err != nil {
-		log.Fatal(err)
-	}
-
 	userRepo := user_repository.NewSQLiteUserRepository(db)
 	userSvc := user_service.NewUserService(userRepo)
 
-	userHandler := handler.NewUserHandler(userSvc)
-	authMiddleware := middleware.NewAuthMiddleware(userSvc)
+	tokenSvc := token_service.NewTokenService(
+		helpers.GetEnv("JWT_SECRET", ""),
+		helpers.GetEnvDuration("JWT_ACCESS_TTL", 5*time.Minute),
+		helpers.GetEnvDuration("JWT_REFRESH_TTL", 168*time.Hour),
+		rdb,
+	)
 
-	sessionStore := filesystem.NewStore(sessionPath, []byte(helpers.GetEnv("SESSION_SECRET", "")))
+	userHandler := handler.NewUserHandler(userSvc, tokenSvc)
+	authMiddleware := middleware.NewAuthMiddleware(tokenSvc)
+
 	app := app.New(
 		userHandler,
 		authMiddleware,
-		sessionStore,
 		helpers.GetEnv("SERVER_ADDR", "localhost:8080"),
 		helpers.GetEnvDuration("SERVER_READ_HEADER_TIMEOUT", 5*time.Second),
 		helpers.GetEnvDuration("SERVER_READ_TIMEOUT", 10*time.Second),

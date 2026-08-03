@@ -1,46 +1,63 @@
 package middleware
 
 import (
+	"errors"
+
 	"github.com/faissalmaulana/cairo/internal/handler"
-	"github.com/faissalmaulana/cairo/internal/service/user"
-	"github.com/gin-contrib/sessions"
+	"github.com/faissalmaulana/cairo/internal/helpers"
+	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthMiddleware struct {
-	userService *user_service.UserService
+	tokenService *token_service.TokenService
 }
 
-func NewAuthMiddleware(userService *user_service.UserService) *AuthMiddleware {
+func NewAuthMiddleware(tokenService *token_service.TokenService) *AuthMiddleware {
 	return &AuthMiddleware{
-		userService: userService,
+		tokenService: tokenService,
 	}
 }
 
 func (am *AuthMiddleware) CheckAuth(c *gin.Context) {
-	session := sessions.Default(c)
-	user := session.Get("user")
-	if user == nil {
-		handler.FailError(c, handler.ErrRequiredSignIn)
+	rawToken, err := helpers.BearerToken(c.GetHeader("Authorization"))
+	if err != nil {
+		handler.FailError(c, handler.ErrTokenRequired)
 		c.Abort()
 		return
 	}
 
-	usrEmail := user.(string)
+	jti, err := am.tokenService.ExtractJTI(rawToken)
+	if err != nil {
+		handler.FailError(c, handler.ErrInvalidToken)
+		c.Abort()
+		return
+	}
 
-	if isexist, err := am.userService.EmailExists(c.Request.Context(), usrEmail); err != nil || !isexist {
-		if err != nil {
-			handler.FailError(c, handler.ErrInternalServer)
-			c.Abort()
-			return
+	revoked, err := am.tokenService.IsRevoked(c.Request.Context(), jti)
+	if err != nil {
+		handler.FailError(c, handler.ErrInternalServer)
+		c.Abort()
+		return
+	}
+	if revoked {
+		handler.FailError(c, handler.ErrTokenRevoked)
+		c.Abort()
+		return
+	}
+
+	claims, err := am.tokenService.ParseAccessToken(rawToken)
+	if err != nil {
+		switch {
+		case errors.Is(err, token_service.ErrExpiredToken):
+			handler.FailError(c, handler.ErrTokenExpired)
+		default:
+			handler.FailError(c, handler.ErrInvalidToken)
 		}
-
-		handler.FailError(c, handler.ErrRequiredSignIn)
 		c.Abort()
 		return
 	}
 
-	c.Set("auth_user", usrEmail)
-
+	c.Set(helpers.AuthUserIDKey, claims.Subject)
 	c.Next()
 }

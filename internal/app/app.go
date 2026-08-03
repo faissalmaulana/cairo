@@ -13,14 +13,12 @@ import (
 
 	"github.com/faissalmaulana/cairo/internal/handler"
 	"github.com/faissalmaulana/cairo/internal/middleware"
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
 type Application struct {
 	userHandler       *handler.UserHandler
 	authMiddleware    *middleware.AuthMiddleware
-	sessionStore      sessions.Store
 	addr              string
 	readHeaderTimeout time.Duration
 	readTimeout       time.Duration
@@ -34,7 +32,6 @@ type Application struct {
 func New(
 	userHandler *handler.UserHandler,
 	authMiddleware *middleware.AuthMiddleware,
-	sessStore sessions.Store,
 	addr string,
 	readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration,
 	mode string,
@@ -45,7 +42,6 @@ func New(
 	return &Application{
 		userHandler:       userHandler,
 		authMiddleware:    authMiddleware,
-		sessionStore:      sessStore,
 		addr:              addr,
 		readHeaderTimeout: readHeaderTimeout,
 		readTimeout:       readTimeout,
@@ -66,11 +62,11 @@ func (app *Application) mux() http.Handler {
 
 	v1 := router.Group("/api/v1")
 	{
-		v1.Use(sessions.Sessions("authentication_session", app.sessionStore))
 		v1.POST("/signup", app.userHandler.SignUp)
 		v1.POST("/signin", app.userHandler.SignIn)
+		v1.POST("/refresh", app.userHandler.Refresh)
 		v1.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
-		v1.GET("/logout", app.authMiddleware.CheckAuth, app.userHandler.Logout)
+		v1.POST("/account/logout", app.authMiddleware.CheckAuth, app.userHandler.Logout)
 	}
 
 	return router

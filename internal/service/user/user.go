@@ -25,6 +25,10 @@ type SignUpInput struct {
 	Password string
 }
 
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
 func (us *UserService) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	user, err := us.repo.GetByEmail(ctx, email)
 	if err != nil {
@@ -34,10 +38,19 @@ func (us *UserService) GetByEmail(ctx context.Context, email string) (*model.Use
 	return user, nil
 }
 
-func (us *UserService) Create(ctx context.Context, nu SignUpInput) error {
+func (us *UserService) GetByID(ctx context.Context, id string) (*model.User, error) {
+	user, err := us.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (us *UserService) Create(ctx context.Context, nu SignUpInput) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(nu.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	newUser := model.User{
@@ -46,11 +59,12 @@ func (us *UserService) Create(ctx context.Context, nu SignUpInput) error {
 		Password: string(hashedPassword),
 	}
 
-	if err := us.repo.Create(ctx, newUser); err != nil {
-		return errors.New("can't create new user")
+	id, err := us.repo.Create(ctx, newUser)
+	if err != nil {
+		return "", errors.New("can't create new user")
 	}
 
-	return nil
+	return id, nil
 }
 
 func (us *UserService) VerifyPassword(ctx context.Context, email, password string) (bool, error) {
@@ -64,6 +78,25 @@ func (us *UserService) VerifyPassword(ctx context.Context, email, password strin
 	}
 
 	return true, nil
+}
+
+// Authenticate returns the user when the email/password pair is valid.
+func (us *UserService) Authenticate(ctx context.Context, email, password string) (*model.User, error) {
+	user, err := us.repo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	pass, err := us.repo.GetPasswordByEmail(ctx, email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(pass), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	return user, nil
 }
 
 func (us *UserService) EmailExists(ctx context.Context, email string) (bool, error) {

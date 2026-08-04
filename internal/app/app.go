@@ -59,7 +59,7 @@ func New(
 	}
 }
 
-func (app *Application) mux() http.Handler {
+func (app *Application) Mux() http.Handler {
 	gin.DisableConsoleColor()
 	gin.SetMode(goodModeToGinMode(app.mode))
 
@@ -99,7 +99,7 @@ func goodModeToGinMode(mode string) string {
 	}
 }
 
-func (app *Application) healthMux() http.Handler {
+func (app *Application) HealthMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", app.health)
 	return mux
@@ -108,7 +108,7 @@ func (app *Application) healthMux() http.Handler {
 func (app *Application) Run() {
 	srv := &http.Server{
 		Addr:              app.addr,
-		Handler:           app.mux(),
+		Handler:           app.Mux(),
 		ReadHeaderTimeout: app.readHeaderTimeout,
 		ReadTimeout:       app.readTimeout,
 		WriteTimeout:      app.writeTimeout,
@@ -117,7 +117,7 @@ func (app *Application) Run() {
 
 	healthSrv := &http.Server{
 		Addr:              app.healthAddr,
-		Handler:           app.healthMux(),
+		Handler:           app.HealthMux(),
 		ReadHeaderTimeout: app.readHeaderTimeout,
 		IdleTimeout:       app.idleTimeout,
 	}

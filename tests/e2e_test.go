@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -157,41 +156,14 @@ func doRequest(t *testing.T, router http.Handler, method, path, token string, bo
 	return w
 }
 
-// signUp registers a fresh user and returns the token response envelope for
+// signUp registers a fresh user and returns the token response for
 // authenticating subsequent requests.
 func signUp(t *testing.T, router http.Handler, body handler.SignUpRequest) handler.TokenResponse {
 	t.Helper()
 
 	w := doRequest(t, router, http.MethodPost, "/api/v1/signup", "", body)
 
-	var response handler.Response
-
-	decodeBodyResponse(t, w, &response)
-
-	// check status from response header status code and the body
 	require.Equal(t, http.StatusCreated, w.Code)
-	require.Equal(t, true, response.Success)
 
-	require.Nil(t, response.Error)
-
-	data, ok := response.Data.(map[string]any)
-	if !ok {
-		require.Error(t, errors.New("type assertion fail"))
-	}
-
-	return handler.TokenResponse{
-		AccessToken:      data["access_token"].(string),
-		RefreshToken:     data["refresh_token"].(string),
-		TokenType:        data["token_type"].(string),
-		ExpiresIn:        int64(data["expires_in"].(float64)),
-		RefreshExpiresIn: int64(data["refresh_expires_in"].(float64)),
-	}
-}
-
-func decodeBodyResponse(t *testing.T, w *httptest.ResponseRecorder, res *handler.Response) {
-	t.Helper()
-
-	if err := json.NewDecoder(w.Body).Decode(res); err != nil {
-		require.Error(t, err)
-	}
+	return okResponse[handler.TokenResponse](t, w)
 }

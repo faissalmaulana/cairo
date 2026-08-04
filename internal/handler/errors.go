@@ -45,4 +45,8 @@ var (
 	ErrTokenRevoked       = NewError(http.StatusUnauthorized, "TOKEN_REVOKED", "token revoked")
 	ErrRefreshFailed      = NewError(http.StatusUnauthorized, "REFRESH_FAILED", "refresh token is invalid or revoked")
 	ErrAuthHeaderRequired = NewError(http.StatusUnauthorized, "AUTH_HEADER_REQUIRED", "authorization header is required")
+	ErrApiKeyRequired     = NewError(http.StatusUnauthorized, "API_KEY_REQUIRED", "api key is required")
+	ErrInvalidApiKey      = NewError(http.StatusUnauthorized, "INVALID_API_KEY", "invalid api key")
+	ErrApiKeyCreateFailed = NewError(http.StatusInternalServerError, "SERVER_ERROR", "something went wrong during api key creation")
+	ErrApiKeyNotFound     = NewError(http.StatusNotFound, "API_KEY_NOT_FOUND", "api key not found")
 )

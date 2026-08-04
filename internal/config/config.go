@@ -3,6 +3,7 @@ package config
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,7 +19,12 @@ type DBConfig struct {
 }
 
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", cfg.DSN)
+	dsn := cfg.DSN
+	if !strings.Contains(dsn, "?") {
+		dsn += "?_pragma=foreign_keys(1)"
+	}
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

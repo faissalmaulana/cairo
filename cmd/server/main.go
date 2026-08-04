@@ -9,7 +9,9 @@ import (
 	"github.com/faissalmaulana/cairo/internal/handler"
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/middleware"
+	apikey_repository "github.com/faissalmaulana/cairo/internal/repository/apikey"
 	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
+	apikey_service "github.com/faissalmaulana/cairo/internal/service/apikey"
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/joho/godotenv"
@@ -55,9 +57,16 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc, tokenSvc)
 	authMiddleware := middleware.NewAuthMiddleware(tokenSvc)
 
+	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
+	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
+	apiKeyHandler := handler.NewApiKeyHandler(apiKeySvc)
+	apiKeyMiddleware := middleware.NewApiKeyMiddleware(apiKeySvc)
+
 	app := app.New(
 		userHandler,
+		apiKeyHandler,
 		authMiddleware,
+		apiKeyMiddleware,
 		helpers.GetEnv("SERVER_ADDR", "localhost:8080"),
 		helpers.GetEnvDuration("SERVER_READ_HEADER_TIMEOUT", 5*time.Second),
 		helpers.GetEnvDuration("SERVER_READ_TIMEOUT", 10*time.Second),

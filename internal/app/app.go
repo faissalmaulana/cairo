@@ -18,7 +18,9 @@ import (
 
 type Application struct {
 	userHandler       *handler.UserHandler
+	apiKeyHandler     *handler.ApiKeyHandler
 	authMiddleware    *middleware.AuthMiddleware
+	apiKeyMiddleware  *middleware.ApiKeyMiddleware
 	addr              string
 	readHeaderTimeout time.Duration
 	readTimeout       time.Duration
@@ -31,7 +33,9 @@ type Application struct {
 
 func New(
 	userHandler *handler.UserHandler,
+	apiKeyHandler *handler.ApiKeyHandler,
 	authMiddleware *middleware.AuthMiddleware,
+	apiKeyMiddleware *middleware.ApiKeyMiddleware,
 	addr string,
 	readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration,
 	mode string,
@@ -41,7 +45,9 @@ func New(
 
 	return &Application{
 		userHandler:       userHandler,
+		apiKeyHandler:     apiKeyHandler,
 		authMiddleware:    authMiddleware,
+		apiKeyMiddleware:  apiKeyMiddleware,
 		addr:              addr,
 		readHeaderTimeout: readHeaderTimeout,
 		readTimeout:       readTimeout,
@@ -67,6 +73,14 @@ func (app *Application) mux() http.Handler {
 		v1.POST("/refresh", app.userHandler.Refresh)
 		v1.GET("/account", app.authMiddleware.CheckAuth, app.userHandler.Account)
 		v1.POST("/account/logout", app.authMiddleware.CheckAuth, app.userHandler.Logout)
+
+		apiKeys := v1.Group("/account/apikeys", app.authMiddleware.CheckAuth)
+		{
+			apiKeys.POST("", app.apiKeyHandler.Create)
+			apiKeys.GET("", app.apiKeyHandler.List)
+			apiKeys.DELETE("/:id", app.apiKeyHandler.Revoke)
+		}
+
 	}
 
 	return router

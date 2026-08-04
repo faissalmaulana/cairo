@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/faissalmaulana/cairo/internal/helpers"
@@ -59,10 +60,10 @@ var (
 	ErrBucketNotFound          = errors.New("bucket not found")
 	ErrInternal                = errors.New("internal error")
 	ErrInvalidBucketName       = errors.New("invalid bucket name")
-	ErrObjectNotFound     = errors.New("object not found")
-	ErrUnauthorized       = errors.New("unauthorized")
-	ErrOwnerIDRequired    = errors.New("owner's ID is required")
-	ErrChecksumMismatch   = errors.New("checksum mismatch")
+	ErrObjectNotFound          = errors.New("object not found")
+	ErrUnauthorized            = errors.New("unauthorized")
+	ErrOwnerIDRequired         = errors.New("owner's ID is required")
+	ErrChecksumMismatch        = errors.New("checksum mismatch")
 )
 
 type ObjectStorage struct {
@@ -70,6 +71,7 @@ type ObjectStorage struct {
 	objectDB metadata.ObjectMetadataRepository
 	disk     *disk.Disk
 	checksum helpers.CheckSummer
+	logger   *slog.Logger
 }
 
 func NewObjectStorage(
@@ -77,13 +79,22 @@ func NewObjectStorage(
 	objectMetadata metadata.ObjectMetadataRepository,
 	disk *disk.Disk,
 	checksum helpers.CheckSummer,
+	logger *slog.Logger,
 ) *ObjectStorage {
 	return &ObjectStorage{
 		bucketDB: metadata,
 		objectDB: objectMetadata,
 		disk:     disk,
 		checksum: checksum,
+		logger:   logger,
 	}
+}
+
+// logError logs the underlying cause of an error that is about to be returned
+// to callers as a user-friendly sentinel (e.g. ErrInternal). It prefers the
+// request-scoped logger so the line carries the request_id.
+func (oe *ObjectStorage) logError(ctx context.Context, err error) {
+	helpers.LoggerFromContext(ctx, oe.logger).Error("internal_error", "err_msg", err)
 }
 
 func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucketInput) (string, error) {
@@ -97,6 +108,7 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 
 	existing, err := oe.bucketDB.GetBucketByName(ctx, newBucket.Name)
 	if err != nil && !errors.Is(err, metadata.ErrBucketNotFound) {
+		oe.logError(ctx, err)
 		return "", ErrInternal
 	}
 	if err == nil {
@@ -112,6 +124,7 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 		Visibilty: model.Private,
 	})
 	if err != nil {
+		oe.logError(ctx, err)
 		return "", ErrInternal
 	}
 
@@ -129,6 +142,7 @@ func (oe *ObjectStorage) GetBucket(ctx context.Context, input GetBucketInput) (*
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return nil, ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return nil, ErrInternal
 		}
 	}
@@ -143,6 +157,7 @@ func (oe *ObjectStorage) ListBuckets(ctx context.Context, ownerID string) ([]mod
 
 	buckets, err := oe.bucketDB.ListBuckets(ctx, ownerID)
 	if err != nil {
+		oe.logError(ctx, err)
 		return nil, ErrInternal
 	}
 
@@ -160,12 +175,14 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return ErrInternal
 		}
 	}
 
 	err = oe.bucketDB.DeleteBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
+		oe.logError(ctx, err)
 		return ErrInternal
 	}
 
@@ -183,6 +200,7 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return ErrInternal
 		}
 	}
@@ -191,6 +209,7 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 		Visibilty: &input.Visibilty,
 	})
 	if err != nil {
+		oe.logError(ctx, err)
 		return ErrInternal
 	}
 
@@ -219,6 +238,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return "", ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return "", ErrInternal
 		}
 	}
@@ -234,6 +254,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 		Directory:    input.OwnerID,
 		Subdirectory: hashedBucketID,
 	}); err != nil || code != 0 {
+		oe.logError(ctx, err)
 		return "", ErrInternal
 	}
 
@@ -248,6 +269,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	})
 
 	if err != nil {
+		oe.logError(ctx, err)
 		return "", ErrInternal
 	}
 
@@ -261,6 +283,7 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return nil, ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return nil, ErrInternal
 		}
 	}
@@ -285,6 +308,7 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 		case errors.Is(err, disk.ErrFileNotFound):
 			return nil, ErrObjectNotFound
 		default:
+			oe.logError(ctx, err)
 			return nil, ErrInternal
 		}
 	}
@@ -293,6 +317,7 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 	hash := oe.checksum.Hash()
 	var buf bytes.Buffer
 	if _, err := io.Copy(io.MultiWriter(hash, &buf), rc); err != nil {
+		oe.logError(ctx, err)
 		return nil, ErrInternal
 	}
 	if hash.Sum() != objectMetadata.Sha256sum {
@@ -313,12 +338,14 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return nil, ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return nil, ErrInternal
 		}
 	}
 
 	objects, err := oe.objectDB.ListObjects(ctx, bucket.ID, ownerID)
 	if err != nil {
+		oe.logError(ctx, err)
 		return nil, ErrInternal
 	}
 
@@ -336,6 +363,7 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		case errors.Is(err, metadata.ErrBucketNotFound):
 			return ErrBucketNotFound
 		default:
+			oe.logError(ctx, err)
 			return ErrInternal
 		}
 	}
@@ -346,15 +374,18 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		case errors.Is(err, metadata.ErrObjectNotFound):
 			return ErrObjectNotFound
 		default:
+			oe.logError(ctx, err)
 			return ErrInternal
 		}
 	}
 
 	if err := oe.disk.Delete(input.OwnerID, object.Path); err != nil {
+		oe.logError(ctx, err)
 		return ErrInternal
 	}
 
 	if err := oe.objectDB.DeleteObject(ctx, bucket.ID, input.OwnerID, input.Name); err != nil {
+		oe.logError(ctx, err)
 		return ErrInternal
 	}
 

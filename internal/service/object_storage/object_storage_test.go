@@ -15,7 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"log/slog"
 )
+
+// discardLogger returns an slog.Logger that drops everything, keeping tests
+// that exercise service errors quiet while satisfying the injected logger.
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 type MockBucketMetadataRepository struct {
 	mock.Mock
@@ -99,14 +106,14 @@ func setupTest(t *testing.T) (*MockBucketMetadataRepository, *ObjectStorage) {
 	m := new(MockBucketMetadataRepository)
 	om := new(MockObjectMetadataRepository)
 	cm := new(MockChecksum)
-	return m, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm)
+	return m, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm, discardLogger())
 }
 
 func setupObjectTest(t *testing.T) (*MockBucketMetadataRepository, *MockObjectMetadataRepository, *ObjectStorage) {
 	m := new(MockBucketMetadataRepository)
 	om := new(MockObjectMetadataRepository)
 	cm := new(MockChecksum)
-	return m, om, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm)
+	return m, om, NewObjectStorage(m, om, disk.NewDisk(t.TempDir()), cm, discardLogger())
 }
 
 func TestCreateBucket(t *testing.T) {
@@ -602,7 +609,7 @@ func TestUploadObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -628,7 +635,7 @@ func TestUploadObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -665,7 +672,7 @@ func TestUploadObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := UploadObjectInput{
 			BucketName: "avatars",
@@ -813,7 +820,7 @@ func TestGetObject(t *testing.T) {
 		entry := t.TempDir()
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -843,7 +850,7 @@ func TestGetObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -879,7 +886,7 @@ func TestGetObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -918,7 +925,7 @@ func TestGetObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -957,7 +964,7 @@ func TestGetObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -996,7 +1003,7 @@ func TestGetObject(t *testing.T) {
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
 		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
 
 		input := DownloadObjectInput{
 			BucketName: "avatars",
@@ -1208,7 +1215,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",
@@ -1237,7 +1244,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",
@@ -1272,7 +1279,7 @@ func TestDeleteObject(t *testing.T) {
 
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum))
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
 
 		input := DeleteObjectInput{
 			BucketName: "avatars",

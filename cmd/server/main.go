@@ -1,7 +1,10 @@
 package main
 
 import (
+	"io"
 	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/faissalmaulana/cairo/internal/app"
@@ -16,6 +19,7 @@ import (
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/joho/godotenv"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func main() {
@@ -46,19 +50,32 @@ func main() {
 	}
 
 	userRepo := user_repository.NewSQLiteUserRepository(db)
-	userSvc := user_service.NewUserService(userRepo)
+
+	filelogger := &lumberjack.Logger{
+		Filename:   helpers.GetEnv("LOG_LOCATION", "./log/cairo.log"),
+		MaxSize:    helpers.GetEnvInt("LOG_MAX_SIZE", 50), // megabytes
+		MaxBackups: helpers.GetEnvInt("LOG_MAX_BACKUPS", 3),
+		Compress:   true,
+	}
+
+	// Combine stdout and Lumberjack file writer
+	multiWriter := io.MultiWriter(os.Stdout, filelogger)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, nil))
+
+	userSvc := user_service.NewUserService(userRepo, logger)
 
 	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
-	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
+	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo, logger)
 
 	tokenSvc := token_service.NewTokenService(
 		helpers.GetEnv("JWT_SECRET", ""),
 		helpers.GetEnvDuration("JWT_ACCESS_TTL", 5*time.Minute),
 		helpers.GetEnvDuration("JWT_REFRESH_TTL", 168*time.Hour),
 		rdb,
+		logger,
 	)
 
-	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo)
+	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo, logger)
 
 	userHandler := handler.NewUserHandler(userSvc, tokenSvc, authSvc)
 	authMiddleware := middleware.NewAuthMiddleware(tokenSvc)
@@ -79,6 +96,7 @@ func main() {
 		helpers.GetEnv("SERVER_MODE", "development"),
 		&handler.DependenciesHealth{DB: db, Redis: rdb},
 		helpers.GetEnv("HEALTH_ADDR", "localhost:8081"),
+		logger,
 	)
 	app.Run()
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -18,15 +19,17 @@ import (
 const lastUsedThrottle = 5 * time.Minute
 
 type ApiKeyService struct {
-	repo apikey_repository.ApiKeyRepository
+	repo   apikey_repository.ApiKeyRepository
+	logger *slog.Logger
 
 	lastUsedMu   sync.Mutex
 	lastUsedSeen map[string]time.Time
 }
 
-func NewApiKeyService(repo apikey_repository.ApiKeyRepository) *ApiKeyService {
+func NewApiKeyService(repo apikey_repository.ApiKeyRepository, logger *slog.Logger) *ApiKeyService {
 	return &ApiKeyService{
 		repo:         repo,
+		logger:       logger,
 		lastUsedSeen: make(map[string]time.Time),
 	}
 }
@@ -74,6 +77,7 @@ func (as *ApiKeyService) Create(ctx context.Context, userID string) (GeneratedKe
 
 	id, err := as.repo.Create(ctx, key.ApiKey)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return GeneratedKey{}, ErrApiKeyCreateFail
 	}
 	key.ID = id
@@ -84,6 +88,7 @@ func (as *ApiKeyService) Create(ctx context.Context, userID string) (GeneratedKe
 func (as *ApiKeyService) List(ctx context.Context, userID string) ([]model.ApiKey, error) {
 	keys, err := as.repo.ListByUser(ctx, userID)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return nil, err
 	}
 
@@ -96,6 +101,7 @@ func (as *ApiKeyService) Revoke(ctx context.Context, keyID, userID string) error
 		if errors.Is(err, apikey_repository.ErrApiKeyNotFound) {
 			return ErrApiKeyNotFound
 		}
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return err
 	}
 
@@ -117,6 +123,7 @@ func (as *ApiKeyService) touchLastUsed(ctx context.Context, keyID string) error 
 	as.lastUsedMu.Unlock()
 
 	if err := as.repo.TouchLastUsed(ctx, keyID); err != nil {
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return err
 	}
 
@@ -135,10 +142,12 @@ func (as *ApiKeyService) Validate(ctx context.Context, rawKey string) (*model.Ap
 		if errors.Is(err, apikey_repository.ErrApiKeyNotFound) {
 			return nil, ErrInvalidApiKey
 		}
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return nil, err
 	}
 
 	if err := as.touchLastUsed(ctx, key.ID); err != nil {
+		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
 		return nil, err
 	}
 

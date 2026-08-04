@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -71,19 +73,22 @@ func setupEnv(t *testing.T) http.Handler {
 
 	require.NoError(t, migrations.Up(db))
 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	userRepo := user_repository.NewSQLiteUserRepository(db)
-	userSvc := user_service.NewUserService(userRepo)
+	userSvc := user_service.NewUserService(userRepo, logger)
 
 	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
-	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
+	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo, logger)
 
-	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo)
+	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo, logger)
 
 	tokenSvc := token_service.NewTokenService(
 		"e2e-secret",
 		5*time.Minute,
 		168*time.Hour,
 		rdb,
+		logger,
 	)
 
 	userHandler := handler.NewUserHandler(userSvc, tokenSvc, authSvc)
@@ -101,6 +106,7 @@ func setupEnv(t *testing.T) http.Handler {
 		"test",
 		&handler.DependenciesHealth{DB: db, Redis: rdb},
 		"",
+		logger,
 	)
 
 	checkHealthDependency(t, application.HealthMux())

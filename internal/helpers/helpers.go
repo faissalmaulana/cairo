@@ -1,11 +1,13 @@
 package helpers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"hash"
 	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 )
@@ -17,6 +19,21 @@ const AuthUserIDKey = "auth_user_id"
 
 // ApiKeyIDKey is the gin context key holding the authenticated api key's id.
 const ApiKeyIDKey = "api_key_id"
+
+// RequestLoggerKey is the request-context key holding a request-scoped
+// *slog.Logger, injected by middleware.RequestIDMiddleware/SlogMiddleware so
+// service-level logs carry the same request_id as the access log.
+const RequestLoggerKey = "request_logger"
+
+// LoggerFromContext returns the request-scoped logger when the context carries
+// one, otherwise the caller's fallback logger. This lets services enrich their
+// logs with request_id without being tightly coupled to the HTTP layer.
+func LoggerFromContext(ctx context.Context, fallback *slog.Logger) *slog.Logger {
+	if l, ok := ctx.Value(RequestLoggerKey).(*slog.Logger); ok && l != nil {
+		return l
+	}
+	return fallback
+}
 
 func ValidateOwnerID(ownerID string) error {
 	if len(ownerID) == 0 {

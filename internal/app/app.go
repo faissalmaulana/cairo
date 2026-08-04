@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,6 +30,7 @@ type Application struct {
 	mode              string
 	health            handler.HealthChecker
 	healthAddr        string
+	logger            *slog.Logger
 }
 
 func New(
@@ -41,6 +43,7 @@ func New(
 	mode string,
 	health handler.HealthChecker,
 	healthAddr string,
+	logger *slog.Logger,
 ) *Application {
 
 	return &Application{
@@ -56,6 +59,7 @@ func New(
 		mode:              mode,
 		health:            health,
 		healthAddr:        healthAddr,
+		logger:            logger,
 	}
 }
 
@@ -63,7 +67,10 @@ func (app *Application) Mux() http.Handler {
 	gin.DisableConsoleColor()
 	gin.SetMode(goodModeToGinMode(app.mode))
 
-	router := gin.Default()
+	router := gin.New()
+
+	router.Use(middleware.RequestIDMiddleware())
+	router.Use(middleware.SlogMiddleware(app.logger))
 	router.SetTrustedProxies(nil)
 
 	v1 := router.Group("/api/v1")

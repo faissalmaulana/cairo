@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"gopkg.in/natefinch/lumberjack.v2"
 	_ "modernc.org/sqlite"
 )
 
@@ -71,19 +74,31 @@ func setupEnv(t *testing.T) http.Handler {
 
 	require.NoError(t, migrations.Up(db))
 
+	filelogger := &lumberjack.Logger{
+		Filename:   "./log/cairo_e2e.log",
+		MaxSize:    50, // megabytes
+		MaxBackups: 3,
+		Compress:   true,
+	}
+
+	// Combine stdout and Lumberjack file writer
+	multiWriter := io.MultiWriter(os.Stdout, filelogger)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, nil))
+
 	userRepo := user_repository.NewSQLiteUserRepository(db)
-	userSvc := user_service.NewUserService(userRepo)
+	userSvc := user_service.NewUserService(userRepo, logger)
 
 	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
-	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
+	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo, logger)
 
-	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo)
+	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo, logger)
 
 	tokenSvc := token_service.NewTokenService(
 		"e2e-secret",
 		5*time.Minute,
 		168*time.Hour,
 		rdb,
+		logger,
 	)
 
 	userHandler := handler.NewUserHandler(userSvc, tokenSvc, authSvc)
@@ -101,6 +116,7 @@ func setupEnv(t *testing.T) http.Handler {
 		"test",
 		&handler.DependenciesHealth{DB: db, Redis: rdb},
 		"",
+		logger,
 	)
 
 	checkHealthDependency(t, application.HealthMux())

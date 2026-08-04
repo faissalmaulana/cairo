@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -34,14 +36,16 @@ type TokenService struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	rdb        *redis.Client
+	logger     *slog.Logger
 }
 
-func NewTokenService(secret string, accessTTL, refreshTTL time.Duration, rdb *redis.Client) *TokenService {
+func NewTokenService(secret string, accessTTL, refreshTTL time.Duration, rdb *redis.Client, logger *slog.Logger) *TokenService {
 	return &TokenService{
 		secret:     []byte(secret),
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 		rdb:        rdb,
+		logger:     logger,
 	}
 }
 
@@ -144,6 +148,7 @@ func (ts *TokenService) IsRevoked(ctx context.Context, jti string) (bool, error)
 
 	n, err := ts.rdb.Exists(ctx, fmt.Sprintf(denylistKey, jti)).Result()
 	if err != nil {
+		helpers.LoggerFromContext(ctx, ts.logger).Error("internal_error", "err_msg", err)
 		return false, err
 	}
 
@@ -159,7 +164,12 @@ func (ts *TokenService) Revoke(ctx context.Context, jti string, remaining time.D
 		return nil
 	}
 
-	return ts.rdb.Set(ctx, fmt.Sprintf(denylistKey, jti), 1, remaining).Err()
+	if err := ts.rdb.Set(ctx, fmt.Sprintf(denylistKey, jti), 1, remaining).Err(); err != nil {
+		helpers.LoggerFromContext(ctx, ts.logger).Error("internal_error", "err_msg", err)
+		return err
+	}
+
+	return nil
 }
 
 func (ts *TokenService) StoreRefresh(ctx context.Context, jti, userID string) error {
@@ -167,7 +177,12 @@ func (ts *TokenService) StoreRefresh(ctx context.Context, jti, userID string) er
 		return ErrNoRedis
 	}
 
-	return ts.rdb.Set(ctx, fmt.Sprintf(refreshKey, jti), userID, ts.refreshTTL).Err()
+	if err := ts.rdb.Set(ctx, fmt.Sprintf(refreshKey, jti), userID, ts.refreshTTL).Err(); err != nil {
+		helpers.LoggerFromContext(ctx, ts.logger).Error("internal_error", "err_msg", err)
+		return err
+	}
+
+	return nil
 }
 
 func (ts *TokenService) ConsumeRefresh(ctx context.Context, jti string) (string, error) {
@@ -180,6 +195,7 @@ func (ts *TokenService) ConsumeRefresh(ctx context.Context, jti string) (string,
 		return "", ErrRefreshRevoked
 	}
 	if err != nil {
+		helpers.LoggerFromContext(ctx, ts.logger).Error("internal_error", "err_msg", err)
 		return "", err
 	}
 

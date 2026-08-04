@@ -3,19 +3,23 @@ package user_service
 import (
 	"context"
 	"errors"
+	"log/slog"
 
+	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/model"
-	"github.com/faissalmaulana/cairo/internal/repository/user"
+	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
-	repo user_repository.UserRepository
+	repo   user_repository.UserRepository
+	logger *slog.Logger
 }
 
-func NewUserService(repo user_repository.UserRepository) *UserService {
+func NewUserService(repo user_repository.UserRepository, logger *slog.Logger) *UserService {
 	return &UserService{
-		repo: repo,
+		repo:   repo,
+		logger: logger,
 	}
 }
 
@@ -32,6 +36,7 @@ var (
 func (us *UserService) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	user, err := us.repo.GetByEmail(ctx, email)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return nil, err
 	}
 
@@ -41,6 +46,7 @@ func (us *UserService) GetByEmail(ctx context.Context, email string) (*model.Use
 func (us *UserService) GetByID(ctx context.Context, id string) (*model.User, error) {
 	user, err := us.repo.GetByID(ctx, id)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return nil, err
 	}
 
@@ -50,11 +56,13 @@ func (us *UserService) GetByID(ctx context.Context, id string) (*model.User, err
 func (us *UserService) Create(ctx context.Context, nu SignUpInput) (string, error) {
 	newUser, err := PrepareSignUp(nu)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return "", err
 	}
 
 	id, err := us.repo.Create(ctx, *newUser)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return "", errors.New("can't create new user")
 	}
 
@@ -80,10 +88,12 @@ func PrepareSignUp(nu SignUpInput) (*model.User, error) {
 func (us *UserService) VerifyPassword(ctx context.Context, email, password string) (bool, error) {
 	pass, err := us.repo.GetPasswordByEmail(ctx, email)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return false, errors.New("can't find password")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(pass), []byte(password)); err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return false, errors.New("password mismatch")
 	}
 
@@ -94,15 +104,18 @@ func (us *UserService) VerifyPassword(ctx context.Context, email, password strin
 func (us *UserService) Authenticate(ctx context.Context, email, password string) (*model.User, error) {
 	user, err := us.repo.GetByEmail(ctx, email)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return nil, ErrInvalidCredentials
 	}
 
 	pass, err := us.repo.GetPasswordByEmail(ctx, email)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(pass), []byte(password)); err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return nil, ErrInvalidCredentials
 	}
 
@@ -113,6 +126,7 @@ func (us *UserService) EmailExists(ctx context.Context, email string) (bool, err
 
 	isExist, err := us.repo.EmailExists(ctx, email)
 	if err != nil {
+		helpers.LoggerFromContext(ctx, us.logger).Error("internal_error", "err_msg", err)
 		return false, errors.New("something went wrong")
 	}
 

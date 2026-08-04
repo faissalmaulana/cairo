@@ -48,23 +48,33 @@ func (us *UserService) GetByID(ctx context.Context, id string) (*model.User, err
 }
 
 func (us *UserService) Create(ctx context.Context, nu SignUpInput) (string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(nu.Password), bcrypt.DefaultCost)
+	newUser, err := PrepareSignUp(nu)
 	if err != nil {
 		return "", err
 	}
 
-	newUser := model.User{
-		Username: nu.Username,
-		Email:    nu.Email,
-		Password: string(hashedPassword),
-	}
-
-	id, err := us.repo.Create(ctx, newUser)
+	id, err := us.repo.Create(ctx, *newUser)
 	if err != nil {
 		return "", errors.New("can't create new user")
 	}
 
 	return id, nil
+}
+
+// PrepareSignUp hashes the password and builds the user model ready for
+// persistence. Extracted so callers that persist inside a transaction can
+// reuse the same preparation without duplicating hashing logic.
+func PrepareSignUp(nu SignUpInput) (*model.User, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(nu.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.User{
+		Username: nu.Username,
+		Email:    nu.Email,
+		Password: string(hashedPassword),
+	}, nil
 }
 
 func (us *UserService) VerifyPassword(ctx context.Context, email, password string) (bool, error) {

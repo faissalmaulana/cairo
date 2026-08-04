@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/faissalmaulana/cairo/internal/model"
+	"github.com/faissalmaulana/cairo/internal/repository"
 	"github.com/faissalmaulana/cairo/internal/variables"
 	"github.com/google/uuid"
 )
@@ -19,12 +20,20 @@ type UserRepository interface {
 }
 
 type SQLiteUserRepository struct {
-	db *sql.DB
+	db repository.DBTX
 }
 
 func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
 	return &SQLiteUserRepository{
 		db: db,
+	}
+}
+
+// WithTx returns a repository bound to the given transaction, so multiple
+// repositories can participate in the same atomic unit of work.
+func (ud *SQLiteUserRepository) WithTx(tx *sql.Tx) *SQLiteUserRepository {
+	return &SQLiteUserRepository{
+		db: tx,
 	}
 }
 

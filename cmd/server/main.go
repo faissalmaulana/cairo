@@ -12,6 +12,7 @@ import (
 	apikey_repository "github.com/faissalmaulana/cairo/internal/repository/apikey"
 	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
 	apikey_service "github.com/faissalmaulana/cairo/internal/service/apikey"
+	auth_service "github.com/faissalmaulana/cairo/internal/service/auth"
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/joho/godotenv"
@@ -47,6 +48,9 @@ func main() {
 	userRepo := user_repository.NewSQLiteUserRepository(db)
 	userSvc := user_service.NewUserService(userRepo)
 
+	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
+	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
+
 	tokenSvc := token_service.NewTokenService(
 		helpers.GetEnv("JWT_SECRET", ""),
 		helpers.GetEnvDuration("JWT_ACCESS_TTL", 5*time.Minute),
@@ -54,11 +58,11 @@ func main() {
 		rdb,
 	)
 
-	userHandler := handler.NewUserHandler(userSvc, tokenSvc)
+	authSvc := auth_service.NewAuthService(db, userRepo, apiKeyRepo)
+
+	userHandler := handler.NewUserHandler(userSvc, tokenSvc, authSvc)
 	authMiddleware := middleware.NewAuthMiddleware(tokenSvc)
 
-	apiKeyRepo := apikey_repository.NewSQLiteApiKeyRepository(db)
-	apiKeySvc := apikey_service.NewApiKeyService(apiKeyRepo)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeySvc)
 	apiKeyMiddleware := middleware.NewApiKeyMiddleware(apiKeySvc)
 

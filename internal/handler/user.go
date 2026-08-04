@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/faissalmaulana/cairo/internal/helpers"
+	auth_service "github.com/faissalmaulana/cairo/internal/service/auth"
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/gin-gonic/gin"
@@ -13,12 +14,14 @@ import (
 type UserHandler struct {
 	userService  *user_service.UserService
 	tokenService *token_service.TokenService
+	authService  *auth_service.AuthService
 }
 
-func NewUserHandler(userService *user_service.UserService, tokenService *token_service.TokenService) *UserHandler {
+func NewUserHandler(userService *user_service.UserService, tokenService *token_service.TokenService, authService *auth_service.AuthService) *UserHandler {
 	return &UserHandler{
 		userService:  userService,
 		tokenService: tokenService,
+		authService:  authService,
 	}
 }
 
@@ -53,7 +56,7 @@ func (ur *UserHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	userID, err := ur.userService.Create(c.Request.Context(), user_service.SignUpInput(signUp))
+	userID, err := ur.authService.SignUp(c.Request.Context(), user_service.SignUpInput(signUp))
 	if err != nil {
 		FailError(c, ErrSignUpFailed)
 		return

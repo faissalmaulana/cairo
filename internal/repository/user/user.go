@@ -1,0 +1,123 @@
+package user_repository
+
+import (
+	"context"
+	"database/sql"
+	"time"
+
+	"github.com/faissalmaulana/cairo/internal/model"
+	"github.com/faissalmaulana/cairo/internal/repository"
+	"github.com/faissalmaulana/cairo/internal/variables"
+	"github.com/google/uuid"
+)
+
+type UserRepository interface {
+	Create(ctx context.Context, newUsr model.User) (string, error)
+	GetPasswordByEmail(ctx context.Context, email string) (string, error)
+	EmailExists(ctx context.Context, email string) (bool, error)
+	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	GetByID(ctx context.Context, id string) (*model.User, error)
+}
+
+type SQLiteUserRepository struct {
+	db repository.DBTX
+}
+
+func NewSQLiteUserRepository(db *sql.DB) *SQLiteUserRepository {
+	return &SQLiteUserRepository{
+		db: db,
+	}
+}
+
+// WithTx returns a repository bound to the given transaction, so multiple
+// repositories can participate in the same atomic unit of work.
+func (ud *SQLiteUserRepository) WithTx(tx *sql.Tx) *SQLiteUserRepository {
+	return &SQLiteUserRepository{
+		db: tx,
+	}
+}
+
+func (ud *SQLiteUserRepository) Create(ctx context.Context, newUsr model.User) (string, error) {
+	id := uuid.NewString()
+	query := `INSERT INTO users(id,username,email,password,createdAt) VALUES(?,?,?,?,?)`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	_, err := ud.db.ExecContext(
+		queryctx,
+		query,
+		id,
+		newUsr.Username,
+		newUsr.Email,
+		newUsr.Password,
+		time.Now().UTC(),
+	)
+
+	return id, err
+}
+func (ud *SQLiteUserRepository) GetPasswordByEmail(ctx context.Context, email string) (string, error) {
+
+	query := `SELECT password FROM users WHERE email=?`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	var resultRow string
+	err := ud.db.QueryRowContext(queryctx, query, email).Scan(&resultRow)
+
+	return resultRow, err
+}
+
+func (ud *SQLiteUserRepository) EmailExists(ctx context.Context, email string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email=?) `
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	var exist bool
+	err := ud.db.QueryRowContext(queryctx, query, email).Scan(&exist)
+
+	return exist, err
+
+}
+
+func (ud *SQLiteUserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	query := `SELECT id,username,email FROM users WHERE email = ?`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	var user model.User
+
+	err := ud.db.QueryRowContext(queryctx, query, email).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+	)
+
+	defer cancel()
+
+	return &user, err
+
+}
+
+func (ud *SQLiteUserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
+	query := `SELECT id,username,email FROM users WHERE id = ?`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	var user model.User
+
+	err := ud.db.QueryRowContext(queryctx, query, id).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+	)
+
+	defer cancel()
+
+	return &user, err
+
+}

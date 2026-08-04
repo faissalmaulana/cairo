@@ -7,9 +7,16 @@ import (
 	"hash"
 	"io"
 	"regexp"
+	"strings"
 )
 
 var bucketNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// AuthUserIDKey is the gin context key holding the authenticated user's id.
+const AuthUserIDKey = "auth_user_id"
+
+// ApiKeyIDKey is the gin context key holding the authenticated api key's id.
+const ApiKeyIDKey = "api_key_id"
 
 func ValidateOwnerID(ownerID string) error {
 	if len(ownerID) == 0 {
@@ -56,4 +63,14 @@ func (h *sha256Hash) Sum() string {
 func HashName(input string) string {
 	hash := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(hash[:])
+}
+
+// BearerToken extracts the token value from an "Authorization: Bearer <token>"
+// header. It returns an error if the header is missing or malformed.
+func BearerToken(header string) (string, error) {
+	parts := strings.SplitN(header, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return "", errors.New("invalid authorization header")
+	}
+	return parts[1], nil
 }

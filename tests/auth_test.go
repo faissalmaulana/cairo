@@ -9,6 +9,8 @@ import (
 )
 
 func TestSignUp(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	w := doRequest(t, router, http.MethodPost, "/api/v1/signup", "", handler.SignUpRequest{
@@ -27,6 +29,8 @@ func TestSignUp(t *testing.T) {
 }
 
 func TestSignUpValidation(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	cases := []struct {
@@ -68,6 +72,8 @@ func TestSignUpValidation(t *testing.T) {
 }
 
 func TestSignUpDuplicateEmail(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{
@@ -83,6 +89,8 @@ func TestSignUpDuplicateEmail(t *testing.T) {
 }
 
 func TestSignIn(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{
@@ -107,6 +115,8 @@ func TestSignIn(t *testing.T) {
 }
 
 func TestSignInInvalidCredentials(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{
@@ -124,6 +134,8 @@ func TestSignInInvalidCredentials(t *testing.T) {
 }
 
 func TestAccount(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	t.Run("success getting user's account", func(t *testing.T) {
@@ -150,6 +162,8 @@ func TestAccount(t *testing.T) {
 }
 
 func TestRefresh(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{
@@ -171,6 +185,8 @@ func TestRefresh(t *testing.T) {
 }
 
 func TestRefreshTokenIsSingleUse(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{
@@ -188,6 +204,8 @@ func TestRefreshTokenIsSingleUse(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {
+	t.Parallel()
+
 	router := setupEnv(t)
 
 	body := handler.SignUpRequest{

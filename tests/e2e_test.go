@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -63,15 +62,11 @@ func setupEnv(t *testing.T) http.Handler {
 	rdb := redis.NewClient(&redis.Options{Addr: endpoint})
 	t.Cleanup(func() { rdb.Close() })
 
-	dsn := filepath.Join("..", "database", "test.db")
-	if err := os.Remove(dsn); err != nil && !os.IsNotExist(err) {
-		require.NoError(t, err)
-	}
+	dsn := filepath.Join(t.TempDir(), "test.db")
 	db, err := sql.Open("sqlite", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		db.Close()
-		os.Remove(dsn)
 	})
 
 	require.NoError(t, migrations.Up(db))

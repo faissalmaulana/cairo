@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"gopkg.in/natefinch/lumberjack.v2"
 	_ "modernc.org/sqlite"
 )
 
@@ -73,7 +74,16 @@ func setupEnv(t *testing.T) http.Handler {
 
 	require.NoError(t, migrations.Up(db))
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	filelogger := &lumberjack.Logger{
+		Filename:   "./log/cairo_e2e.log",
+		MaxSize:    50, // megabytes
+		MaxBackups: 3,
+		Compress:   true,
+	}
+
+	// Combine stdout and Lumberjack file writer
+	multiWriter := io.MultiWriter(os.Stdout, filelogger)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, nil))
 
 	userRepo := user_repository.NewSQLiteUserRepository(db)
 	userSvc := user_service.NewUserService(userRepo, logger)

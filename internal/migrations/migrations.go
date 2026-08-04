@@ -22,5 +22,5 @@ func Down(db *sql.DB) error {
 	goose.SetBaseFS(embedMigrations)
 	goose.SetDialect("sqlite3")
 
-	return goose.Up(db, ".")
+	return goose.Down(db, ".")
 }

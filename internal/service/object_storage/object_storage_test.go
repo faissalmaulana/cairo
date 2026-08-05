@@ -88,9 +88,9 @@ func (mor *MockObjectMetadataRepository) DeleteObject(ctx context.Context, bucke
 	return args.Error(0)
 }
 
-func (mor *MockObjectMetadataRepository) DeleteObjectsByBucket(ctx context.Context, bucketID string) error {
+func (mor *MockObjectMetadataRepository) CountObjects(ctx context.Context, bucketID string) (int, error) {
 	args := mor.Mock.Called(ctx, bucketID)
-	return args.Error(0)
+	return args.Int(0), args.Error(1)
 }
 
 type MockChecksum struct {
@@ -447,8 +447,8 @@ func TestDeleteBucket(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("DeleteObjectsByBucket", mock.Anything, bucket.ID).
-			Return(nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(0, nil).Once()
 		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(assert.AnError).Once()
 
@@ -459,7 +459,7 @@ func TestDeleteBucket(t *testing.T) {
 		mockObjectMetadata.AssertExpectations(t)
 	})
 
-	t.Run("cannot delete bucket, something went wrong removing its objects", func(t *testing.T) {
+	t.Run("cannot delete bucket, something went wrong counting its objects", func(t *testing.T) {
 		t.Parallel()
 		mockMetadata := new(MockBucketMetadataRepository)
 		mockObjectMetadata := new(MockObjectMetadataRepository)
@@ -473,12 +473,70 @@ func TestDeleteBucket(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("DeleteObjectsByBucket", mock.Anything, bucket.ID).
-			Return(assert.AnError).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(0, assert.AnError).Once()
 
 		err := objectStorage.DeleteBucket(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot delete bucket because it still has objects", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(t.TempDir()), new(MockChecksum), discardLogger())
+		input := DeleteBucketInput{
+			Name:    "avatars",
+			OwnerID: "user-123",
+		}
+
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(1, nil).Once()
+
+		err := objectStorage.DeleteBucket(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrBucketNotEmpty)
+		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot delete public bucket with objects, public link is left intact", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
+
+		bucket := model.Bucket{
+			ID:         "bucket-1",
+			Name:       "shared",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
+			BucketHash: helpers.HashName("bucket-1"),
+		}
+		publicDir := filepath.Join(entry, "public", bucket.BucketHash)
+		require.NoError(t, disk.NewDisk(entry).Link(filepath.Join(bucket.OwnerID, bucket.BucketHash), bucket.BucketHash))
+
+		input := DeleteBucketInput{Name: bucket.Name, OwnerID: bucket.OwnerID}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(2, nil).Once()
+
+		err := objectStorage.DeleteBucket(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrBucketNotEmpty)
+		assert.FileExists(t, publicDir, "public symlink must not be removed when deletion is refused")
 		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
 		mockMetadata.AssertExpectations(t)
 		mockObjectMetadata.AssertExpectations(t)
@@ -498,8 +556,8 @@ func TestDeleteBucket(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("DeleteObjectsByBucket", mock.Anything, bucket.ID).
-			Return(nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(0, nil).Once()
 		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(nil).Once()
 
@@ -531,8 +589,8 @@ func TestDeleteBucket(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(bucket, nil).Once()
-		mockObjectMetadata.On("DeleteObjectsByBucket", mock.Anything, bucket.ID).
-			Return(nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(0, nil).Once()
 		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(nil).Once()
 
@@ -562,13 +620,15 @@ func TestDeleteBucket(t *testing.T) {
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(bucket, nil).Once()
+		mockObjectMetadata.On("CountObjects", mock.Anything, bucket.ID).
+			Return(0, nil).Once()
 
 		err := objectStorage.DeleteBucket(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrInternal)
-		mockObjectMetadata.AssertNotCalled(t, "DeleteObjectsByBucket", mock.Anything, mock.Anything)
 		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
 		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
 	})
 }
 

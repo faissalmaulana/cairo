@@ -87,6 +87,8 @@ func (oh *ObjectStorageHandler) handleObjectStorageError(c *gin.Context, err err
 		FailError(c, ErrObjectNotFound)
 	case errors.Is(err, objectstorage.ErrUnauthorized):
 		FailError(c, ErrBucketForbidden)
+	case errors.Is(err, objectstorage.ErrBucketNotEmpty):
+		FailError(c, ErrBucketNotEmpty)
 	case errors.Is(err, objectstorage.ErrChecksumMismatch):
 		FailError(c, ErrChecksumMismatch)
 	default:

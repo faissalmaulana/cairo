@@ -12,10 +12,9 @@ type ObjectMetadataRepository interface {
 	GetObject(ctx context.Context, bucketID, name string) (model.Object, error)
 	ListObjects(ctx context.Context, bucketID string) ([]model.Object, error)
 	DeleteObject(ctx context.Context, bucketID, name string) error
-	// DeleteObjectsByBucket removes every object row of a bucket. Buckets do
-	// not cascade to objects anymore, so the service must call this before
-	// deleting a bucket.
-	DeleteObjectsByBucket(ctx context.Context, bucketID string) error
+	// CountObjects reports how many object rows a bucket has. Bucket deletion
+	// refuses non-empty buckets, so the service checks this before deleting.
+	CountObjects(ctx context.Context, bucketID string) (int, error)
 }
 
 var (

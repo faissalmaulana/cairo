@@ -240,6 +240,32 @@ func TestDeleteBucket(t *testing.T) {
 	failResponse(t, w, http.StatusNotFound, "BUCKET_NOT_FOUND")
 }
 
+func TestDeleteBucketNotEmpty(t *testing.T) {
+	t.Parallel()
+
+	router := setupEnv(t)
+	auth := setupStorageUser(t, router)
+
+	require.Equal(t, http.StatusCreated, doRequest(t, router, http.MethodPost, bucketPath(auth.AccountID), auth.APIKey, handler.CreateBucketRequest{Name: "occupied"}).Code)
+	require.Equal(t, http.StatusCreated, doUpload(t, router, http.MethodPut, objectPath(auth.AccountID, "occupied", "keep.txt"), auth.APIKey, "keep.txt", []byte("keep me")).Code)
+
+	// Deleting a bucket that still holds objects must be refused.
+	del := doRequest(t, router, http.MethodDelete, bucketNamePath(auth.AccountID, "occupied"), auth.APIKey, nil)
+	failResponse(t, del, http.StatusConflict, "BUCKET_NOT_EMPTY")
+
+	// The bucket and its object are untouched.
+	w := doRequest(t, router, http.MethodGet, bucketNamePath(auth.AccountID, "occupied"), auth.APIKey, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	w = doRequest(t, router, http.MethodGet, objectPath(auth.AccountID, "occupied", "keep.txt"), auth.APIKey, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, []byte("keep me"), w.Body.Bytes())
+
+	// After the object is deleted on the user's behalf, the bucket can go.
+	require.Equal(t, http.StatusOK, doRequest(t, router, http.MethodDelete, objectPath(auth.AccountID, "occupied", "keep.txt"), auth.APIKey, nil).Code)
+	del = doRequest(t, router, http.MethodDelete, bucketNamePath(auth.AccountID, "occupied"), auth.APIKey, nil)
+	require.Equal(t, http.StatusOK, del.Code)
+}
+
 func TestDeletePublicBucketRemovesPublicAccess(t *testing.T) {
 	t.Parallel()
 
@@ -259,7 +285,15 @@ func TestDeletePublicBucketRemovesPublicAccess(t *testing.T) {
 	require.Equal(t, strconv.Itoa(len(content)), w.Header().Get("Content-Length"))
 	require.Equal(t, content, w.Body.Bytes())
 
-	// Deleting the bucket must revoke public access.
+	// Deleting the bucket with an object still in it must be refused and the
+	// public link kept.
+	refused := doRequest(t, router, http.MethodDelete, bucketNamePath(auth.AccountID, "public-delete"), auth.APIKey, nil)
+	failResponse(t, refused, http.StatusConflict, "BUCKET_NOT_EMPTY")
+	w = doRequest(t, router, http.MethodGet, publicObjectPath("public-delete", "share.txt"), "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Delete the object first, then the bucket, revoking public access.
+	require.Equal(t, http.StatusOK, doRequest(t, router, http.MethodDelete, objectPath(auth.AccountID, "public-delete", "share.txt"), auth.APIKey, nil).Code)
 	require.Equal(t, http.StatusOK, doRequest(t, router, http.MethodDelete, bucketNamePath(auth.AccountID, "public-delete"), auth.APIKey, nil).Code)
 
 	// Gone from both the authenticated and the public namespace.

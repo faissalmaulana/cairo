@@ -66,6 +66,7 @@ var (
 	ErrUnauthorized            = errors.New("unauthorized")
 	ErrOwnerIDRequired         = errors.New("owner's ID is required")
 	ErrChecksumMismatch        = errors.New("checksum mismatch")
+	ErrBucketNotEmpty          = errors.New("bucket is not empty")
 )
 
 type ObjectStorage struct {
@@ -182,6 +183,17 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		}
 	}
 
+	// Objects must be deleted by the user first; a bucket with objects left in
+	// it is refused so nothing is silently cleaned up on the user's behalf.
+	count, err := oe.objectDB.CountObjects(ctx, bucket.ID)
+	if err != nil {
+		oe.logError(ctx, err)
+		return ErrInternal
+	}
+	if count > 0 {
+		return ErrBucketNotEmpty
+	}
+
 	// A public bucket has a symlink in the public namespace; remove it before
 	// deleting the bucket so the public path cannot dangle or point at a
 	// directory whose objects are being torn down.
@@ -189,13 +201,6 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		if err := oe.unlinkBucket(ctx, bucket); err != nil {
 			return err
 		}
-	}
-
-	// Objects no longer cascade from buckets, so their rows must be removed
-	// before the bucket row itself.
-	if err := oe.objectDB.DeleteObjectsByBucket(ctx, bucket.ID); err != nil {
-		oe.logError(ctx, err)
-		return ErrInternal
 	}
 
 	err = oe.bucketDB.DeleteBucket(ctx, input.Name, input.OwnerID)

@@ -147,12 +147,16 @@ func (or *SQLiteObjectRepository) DeleteObject(ctx context.Context, bucketID, na
 	return nil
 }
 
-func (or *SQLiteObjectRepository) DeleteObjectsByBucket(ctx context.Context, bucketID string) error {
-	query := `DELETE FROM objects WHERE bucket_id=?`
+func (or *SQLiteObjectRepository) CountObjects(ctx context.Context, bucketID string) (int, error) {
+	query := `SELECT COUNT(*) FROM objects WHERE bucket_id=?`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
-	_, err := or.db.ExecContext(queryctx, query, bucketID)
-	return err
+	var count int
+	if err := or.db.QueryRowContext(queryctx, query, bucketID).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

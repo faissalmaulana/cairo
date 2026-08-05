@@ -56,5 +56,6 @@ var (
 	ErrObjectNotFound      = NewError(http.StatusNotFound, "OBJECT_NOT_FOUND", "object not found")
 	ErrBucketForbidden     = NewError(http.StatusForbidden, "FORBIDDEN", "not allowed to access this bucket")
 	ErrAccountMismatch     = NewError(http.StatusForbidden, "FORBIDDEN_ACCOUNT", "account id does not match the authenticated user")
+	ErrBucketNotEmpty      = NewError(http.StatusConflict, "BUCKET_NOT_EMPTY", "bucket is not empty, delete all objects first")
 	ErrChecksumMismatch    = NewError(http.StatusConflict, "CHECKSUM_MISMATCH", "checksum mismatch")
 )

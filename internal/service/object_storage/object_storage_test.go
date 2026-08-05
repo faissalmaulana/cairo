@@ -465,6 +465,61 @@ func TestDeleteBucket(t *testing.T) {
 		assert.NoError(t, err)
 		mockMetadata.AssertExpectations(t)
 	})
+
+	t.Run("success delete public bucket removes public symlink", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		mockMetadata := new(MockBucketMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, new(MockObjectMetadataRepository), disk.NewDisk(entry), new(MockChecksum), discardLogger())
+
+		bucket := model.Bucket{
+			ID:         "bucket-1",
+			Name:       "shared",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
+			BucketHash: helpers.HashName("bucket-1"),
+		}
+		publicDir := filepath.Join(entry, "public", bucket.BucketHash)
+		require.NoError(t, disk.NewDisk(entry).Link(filepath.Join(bucket.OwnerID, bucket.BucketHash), bucket.BucketHash))
+
+		input := DeleteBucketInput{Name: bucket.Name, OwnerID: bucket.OwnerID}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(bucket, nil).Once()
+		mockMetadata.On("DeleteBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(nil).Once()
+
+		err := objectStorage.DeleteBucket(context.Background(), input)
+
+		assert.NoError(t, err)
+		assert.NoFileExists(t, publicDir, "public symlink should be removed before deleting the bucket")
+		mockMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot delete public bucket when public symlink already missing", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		mockMetadata := new(MockBucketMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, new(MockObjectMetadataRepository), disk.NewDisk(entry), new(MockChecksum), discardLogger())
+
+		bucket := model.Bucket{
+			ID:         "bucket-1",
+			Name:       "shared",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
+			BucketHash: helpers.HashName("bucket-1"),
+		}
+		input := DeleteBucketInput{Name: bucket.Name, OwnerID: bucket.OwnerID}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(bucket, nil).Once()
+
+		err := objectStorage.DeleteBucket(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertNotCalled(t, "DeleteBucket", mock.Anything, mock.Anything, mock.Anything)
+		mockMetadata.AssertExpectations(t)
+	})
 }
 
 func TestSetBucketVisibility(t *testing.T) {

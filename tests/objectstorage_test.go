@@ -226,6 +226,33 @@ func TestDeleteBucket(t *testing.T) {
 	failResponse(t, w, http.StatusNotFound, "BUCKET_NOT_FOUND")
 }
 
+func TestDeletePublicBucketRemovesPublicAccess(t *testing.T) {
+	t.Parallel()
+
+	router := setupEnv(t)
+	auth := setupStorageUser(t, router)
+
+	require.Equal(t, http.StatusCreated, doRequest(t, router, http.MethodPost, bucketPath(auth.AccountID), auth.APIKey, handler.CreateBucketRequest{Name: "public-delete"}).Code)
+	require.Equal(t, http.StatusOK, doRequest(t, router, http.MethodPatch, bucketNamePath(auth.AccountID, "public-delete")+"/visibility", auth.APIKey, handler.SetBucketVisibilityRequest{SetToPublic: true}).Code)
+
+	content := []byte("visible before delete")
+	require.Equal(t, http.StatusCreated, doUpload(t, router, http.MethodPut, objectPath(auth.AccountID, "public-delete", "share.txt"), auth.APIKey, "share.txt", content).Code)
+
+	// The object is reachable in the public namespace before deletion.
+	w := doRequest(t, router, http.MethodGet, publicObjectPath("public-delete", "share.txt"), "", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, content, w.Body.Bytes())
+
+	// Deleting the bucket must revoke public access.
+	require.Equal(t, http.StatusOK, doRequest(t, router, http.MethodDelete, bucketNamePath(auth.AccountID, "public-delete"), auth.APIKey, nil).Code)
+
+	// Gone from both the authenticated and the public namespace.
+	w = doRequest(t, router, http.MethodGet, bucketNamePath(auth.AccountID, "public-delete"), auth.APIKey, nil)
+	failResponse(t, w, http.StatusNotFound, "BUCKET_NOT_FOUND")
+	w = doRequest(t, router, http.MethodGet, publicObjectPath("public-delete", "share.txt"), "", nil)
+	failResponse(t, w, http.StatusNotFound, "BUCKET_NOT_FOUND")
+}
+
 func TestBucketOwnershipIsolation(t *testing.T) {
 	t.Parallel()
 

@@ -169,7 +169,7 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		return ErrOwnerIDRequired
 	}
 
-	_, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -177,6 +177,15 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		default:
 			oe.logError(ctx, err)
 			return ErrInternal
+		}
+	}
+
+	// A public bucket has a symlink in the public namespace; remove it before
+	// deleting the bucket so the public path cannot dangle or point at a
+	// directory whose objects are being torn down.
+	if bucket.Visibility == model.Public {
+		if err := oe.unlinkBucket(ctx, bucket); err != nil {
+			return err
 		}
 	}
 

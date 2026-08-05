@@ -86,11 +86,12 @@ func (h *sha256Hash) Sum() string {
 	return hex.EncodeToString(h.hasher.Sum(nil))
 }
 
-// HashName returns the hex-encoded sha256 digest of input, suitable for use
-// as a directory or filename on disk.
+// HashName returns a 16-character hex digest (first 8 bytes of sha256) of
+// input, suitable for use as a directory or filename on disk while keeping
+// paths short. 64 bits of entropy keeps collisions negligible at scale.
 func HashName(input string) string {
 	hash := sha256.Sum256([]byte(input))
-	return hex.EncodeToString(hash[:])
+	return hex.EncodeToString(hash[:8])
 }
 
 // BearerToken extracts the token value from an "Authorization: Bearer <token>"

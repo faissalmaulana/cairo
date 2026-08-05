@@ -26,6 +26,7 @@ func TestSignUp(t *testing.T) {
 	require.NotEmpty(t, tokens.TokenType)
 	require.NotEmpty(t, tokens.ExpiresIn)
 	require.NotEmpty(t, tokens.RefreshExpiresIn)
+	require.NotEmpty(t, tokens.APIKey)
 }
 
 func TestSignUpValidation(t *testing.T) {
@@ -182,6 +183,8 @@ func TestRefresh(t *testing.T) {
 	require.NotEmpty(t, newTokens.TokenType)
 	require.NotEmpty(t, newTokens.ExpiresIn)
 	require.NotEmpty(t, newTokens.RefreshExpiresIn)
+	// should empty
+	require.Empty(t, newTokens.APIKey)
 }
 
 func TestRefreshTokenIsSingleUse(t *testing.T) {

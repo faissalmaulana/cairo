@@ -37,6 +37,7 @@ type TokenResponse struct {
 	TokenType        string `json:"token_type"`
 	ExpiresIn        int64  `json:"expires_in"`
 	RefreshExpiresIn int64  `json:"refresh_expires_in"`
+	APIKey           string `json:"api_key,omitempty"`
 }
 
 func (ur *UserHandler) SignUp(c *gin.Context) {
@@ -56,7 +57,7 @@ func (ur *UserHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	userID, err := ur.authService.SignUp(c.Request.Context(), user_service.SignUpInput(signUp))
+	userID, key, err := ur.authService.SignUp(c.Request.Context(), user_service.SignUpInput(signUp))
 	if err != nil {
 		FailError(c, ErrSignUpFailed)
 		return
@@ -67,6 +68,8 @@ func (ur *UserHandler) SignUp(c *gin.Context) {
 		FailError(c, ErrSignUpFailed)
 		return
 	}
+
+	tokens.APIKey = key.Plain
 
 	OK(c, http.StatusCreated, tokens)
 }

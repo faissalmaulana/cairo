@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"time"
 
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	apikey_repository "github.com/faissalmaulana/cairo/internal/repository/apikey"
@@ -34,43 +35,47 @@ func NewAuthService(
 }
 
 // SignUp creates a new user and its first api key atomically. If either insert
-// fails, the transaction rolls back and no user persists.
-func (as *AuthService) SignUp(ctx context.Context, nu user_service.SignUpInput) (string, error) {
+// fails, the transaction rolls back and no user persists. The plaintext key is
+// returned exactly once so the caller can hand it to the user.
+func (as *AuthService) SignUp(ctx context.Context, nu user_service.SignUpInput) (string, *apikey_service.GeneratedKey, error) {
 	newUser, err := user_service.PrepareSignUp(nu)
 	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
 
 	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
 	defer tx.Rollback()
 
 	userID, err := as.userRepo.WithTx(tx).Create(ctx, *newUser)
 	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
 
 	key, err := apikey_service.GenerateKey()
 	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
 	key.UserID = userID
+	key.CreatedAt = time.Now().UTC()
 
-	if _, err := as.apiKeyRepo.WithTx(tx).Create(ctx, key.ApiKey); err != nil {
+	keyID, err := as.apiKeyRepo.WithTx(tx).Create(ctx, key.ApiKey)
+	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
+	key.ID = keyID
 
 	if err := tx.Commit(); err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return "", err
+		return "", nil, err
 	}
 
-	return userID, nil
+	return userID, &key, nil
 }

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -251,7 +250,6 @@ func (oh *ObjectStorageHandler) GetObject(c *gin.Context) {
 func (oh *ObjectStorageHandler) GetPublicObject(c *gin.Context) {
 	rc, object, err := oh.objectStorage.GetPublicObject(c.Request.Context(), c.Param("bucket_name"), objectKey(c))
 	if err != nil {
-		fmt.Println("HELLOOOO 4", err)
 		oh.handleObjectStorageError(c, err)
 		return
 	}

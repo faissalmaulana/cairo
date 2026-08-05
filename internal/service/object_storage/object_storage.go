@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -397,7 +396,6 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
-			fmt.Println("HELLOOOO 3", err)
 			return nil, model.Object{}, ErrBucketNotFound
 		default:
 			oe.logError(ctx, err)
@@ -411,7 +409,6 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 
 	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, name)
 	if err != nil {
-		fmt.Println("HELLOOOO 2", err)
 		return nil, model.Object{}, ErrObjectNotFound
 	}
 
@@ -419,7 +416,6 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound), errors.Is(err, disk.ErrDirectoryNotFound):
-			fmt.Println("HELLOOOO FROM DISSKKKK", err)
 			return nil, model.Object{}, ErrObjectNotFound
 		default:
 			oe.logError(ctx, err)

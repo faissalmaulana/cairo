@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"log/slog"
+
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/model"
 	"github.com/faissalmaulana/cairo/internal/repository/metadata"
@@ -15,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"log/slog"
 )
 
 // discardLogger returns an slog.Logger that drops everything, keeping tests
@@ -471,9 +472,9 @@ func TestSetBucketVisibility(t *testing.T) {
 		t.Parallel()
 		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
-			Name:      "avatars",
-			OwnerID:   "",
-			Visibilty: model.Public,
+			Name:       "avatars",
+			OwnerID:    "",
+			Visibility: model.Public,
 		}
 
 		err := objectStorage.SetBucketVisibility(context.Background(), input)
@@ -486,9 +487,9 @@ func TestSetBucketVisibility(t *testing.T) {
 		t.Parallel()
 		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
-			Name:      "not-found-bucket",
-			OwnerID:   "user-123",
-			Visibilty: model.Public,
+			Name:       "not-found-bucket",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
 		}
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
@@ -505,9 +506,9 @@ func TestSetBucketVisibility(t *testing.T) {
 		t.Parallel()
 		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
-			Name:      "avatars",
-			OwnerID:   "user-123",
-			Visibilty: model.Public,
+			Name:       "avatars",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
 		}
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
@@ -525,20 +526,82 @@ func TestSetBucketVisibility(t *testing.T) {
 		t.Parallel()
 		mockMetadata, objectStorage := setupTest(t)
 		input := SetBucketVisibilityInput{
-			Name:      "avatars",
-			OwnerID:   "user-123",
-			Visibilty: model.Public,
+			Name:       "avatars",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
 		}
 
 		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
 			Return(model.Bucket{Name: "avatars", OwnerID: "user-123"}, nil).Once()
 		mockMetadata.On("UpdateBucket", mock.Anything, input.Name, input.OwnerID, model.UpdateBucketInput{
-			Visibilty: &input.Visibilty,
+			Visibility: &input.Visibility,
 		}).Return(nil).Once()
 
 		err := objectStorage.SetBucketVisibility(context.Background(), input)
 
 		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success set bucket visibility to public creates a disk symlink", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, new(MockObjectMetadataRepository), disk.NewDisk(entry), new(MockChecksum), discardLogger())
+		input := SetBucketVisibilityInput{
+			Name:       "avatars",
+			OwnerID:    "user-123",
+			Visibility: model.Public,
+		}
+
+		mockMetadata.On("GetBucket", mock.Anything, input.Name, input.OwnerID).
+			Return(bucket, nil).Once()
+		mockMetadata.On("UpdateBucket", mock.Anything, input.Name, input.OwnerID, model.UpdateBucketInput{
+			Visibility: &input.Visibility,
+		}).Return(nil).Once()
+
+		err := objectStorage.SetBucketVisibility(context.Background(), input)
+
+		assert.NoError(t, err)
+		mockMetadata.AssertExpectations(t)
+
+		link := filepath.Join(entry, "public", helpers.HashName(bucket.ID))
+		info, err := os.Lstat(link)
+		require.NoError(t, err)
+		assert.True(t, info.Mode()&os.ModeSymlink != 0, "public bucket should be symlinked")
+	})
+
+	t.Run("success set bucket visibility to private removes the disk symlink", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123"}
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, new(MockObjectMetadataRepository), disk.NewDisk(entry), new(MockChecksum), discardLogger())
+		public := model.Public
+		private := model.Private
+
+		mockMetadata.On("GetBucket", mock.Anything, "avatars", "user-123").
+			Return(bucket, nil).Twice()
+		mockMetadata.On("UpdateBucket", mock.Anything, "avatars", "user-123", model.UpdateBucketInput{
+			Visibility: &public,
+		}).Return(nil).Once()
+		mockMetadata.On("UpdateBucket", mock.Anything, "avatars", "user-123", model.UpdateBucketInput{
+			Visibility: &private,
+		}).Return(nil).Once()
+
+		require.NoError(t, objectStorage.SetBucketVisibility(context.Background(), SetBucketVisibilityInput{
+			Name: "avatars", OwnerID: "user-123", Visibility: public,
+		}))
+		require.NoError(t, objectStorage.SetBucketVisibility(context.Background(), SetBucketVisibilityInput{
+			Name: "avatars", OwnerID: "user-123", Visibility: private,
+		}))
+
+		link := filepath.Join(entry, "public", helpers.HashName(bucket.ID))
+		_, err := os.Lstat(link)
+		assert.True(t, os.IsNotExist(err), "public symlink should be removed")
 		mockMetadata.AssertExpectations(t)
 	})
 }
@@ -711,7 +774,7 @@ func TestUploadObject(t *testing.T) {
 	})
 }
 
-func TestGetObject(t *testing.T) {
+func TestGetPrivatePrObject(t *testing.T) {
 	t.Run("cannot get object because bucket not found", func(t *testing.T) {
 		t.Parallel()
 		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
@@ -721,7 +784,7 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 
 		_, err := objectStorage.GetObject(context.Background(), input)
@@ -740,7 +803,7 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(model.Bucket{}, assert.AnError).Once()
 
 		_, err := objectStorage.GetObject(context.Background(), input)
@@ -759,36 +822,11 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
-
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
-			Return(bucket, nil).Once()
-
 		_, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrOwnerIDRequired)
 		mockMetadata.AssertExpectations(t)
-		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	})
-
-	t.Run("cannot get object from private bucket because owner's ID is not the bucket owner", func(t *testing.T) {
-		t.Parallel()
-		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
-		input := DownloadObjectInput{
-			BucketName: "avatars",
-			OwnerID:    "intruder-123",
-			Name:       "haaland.png",
-		}
-
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
-
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
-			Return(bucket, nil).Once()
-
-		_, err := objectStorage.GetObject(context.Background(), input)
-
-		assert.ErrorIs(t, err, ErrUnauthorized)
-		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetBucket", mock.Anything, mock.Anything, mock.Anything)
 		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
@@ -801,9 +839,9 @@ func TestGetObject(t *testing.T) {
 			Name:       "missing.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
@@ -828,10 +866,10 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: input.Name, Path: "some/hash"}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
@@ -858,10 +896,10 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: input.Name, Path: "some/hash"}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
@@ -876,7 +914,7 @@ func TestGetObject(t *testing.T) {
 	t.Run("success get object from private bucket", func(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
 			Sha256sum: checksumOf("HELLO,WORLD")}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
@@ -894,85 +932,7 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
-			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
-			Return(object, nil).Once()
-		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
-
-		rc, err := objectStorage.GetObject(context.Background(), input)
-		require.NoError(t, err)
-		defer rc.Close()
-
-		got, err := io.ReadAll(rc)
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO,WORLD", string(got))
-		mockMetadata.AssertExpectations(t)
-		mockObjectMetadata.AssertExpectations(t)
-		mockChecksum.AssertExpectations(t)
-	})
-
-	t.Run("success get object from public bucket without owner's ID", func(t *testing.T) {
-		t.Parallel()
-		entry := t.TempDir()
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
-		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
-			Sha256sum: checksumOf("HELLO,WORLD")}
-		file := filepath.Join(entry, bucket.OwnerID, object.Path)
-		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
-		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
-
-		mockMetadata := new(MockBucketMetadataRepository)
-		mockObjectMetadata := new(MockObjectMetadataRepository)
-		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
-
-		input := DownloadObjectInput{
-			BucketName: "avatars",
-			OwnerID:    "",
-			Name:       "haaland.png",
-		}
-
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
-			Return(bucket, nil).Once()
-		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
-			Return(object, nil).Once()
-		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
-
-		rc, err := objectStorage.GetObject(context.Background(), input)
-		require.NoError(t, err)
-		defer rc.Close()
-
-		got, err := io.ReadAll(rc)
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO,WORLD", string(got))
-		mockMetadata.AssertExpectations(t)
-		mockObjectMetadata.AssertExpectations(t)
-		mockChecksum.AssertExpectations(t)
-	})
-
-	t.Run("success get object from public bucket with a different owner's ID", func(t *testing.T) {
-		t.Parallel()
-		entry := t.TempDir()
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Public}
-		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
-			Sha256sum: checksumOf("HELLO,WORLD")}
-		file := filepath.Join(entry, bucket.OwnerID, object.Path)
-		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
-		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
-
-		mockMetadata := new(MockBucketMetadataRepository)
-		mockObjectMetadata := new(MockObjectMetadataRepository)
-		mockChecksum := new(MockChecksum)
-		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
-
-		input := DownloadObjectInput{
-			BucketName: "avatars",
-			OwnerID:    "someone-else",
-			Name:       "haaland.png",
-		}
-
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
@@ -993,7 +953,7 @@ func TestGetObject(t *testing.T) {
 	t.Run("cannot get object because checksum mismatch", func(t *testing.T) {
 		t.Parallel()
 		entry := t.TempDir()
-		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibilty: model.Private}
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
 		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
 			Sha256sum: "0000000000000000000000000000000000000000000000000000000000000000"}
 		file := filepath.Join(entry, bucket.OwnerID, object.Path)
@@ -1011,13 +971,183 @@ func TestGetObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		mockMetadata.On("GetBucketByName", mock.Anything, input.BucketName).
+		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(bucket, nil).Once()
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		_, err := objectStorage.GetObject(context.Background(), input)
+
+		assert.ErrorIs(t, err, ErrChecksumMismatch)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
+	})
+}
+
+func TestGetPublicObject(t *testing.T) {
+	t.Run("cannot get object because bucket not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+
+		assert.ErrorIs(t, err, ErrBucketNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot get object, something went wrong with the bucket metadata repository method", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(model.Bucket{}, assert.AnError).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot get object from private bucket", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Private}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+
+		assert.ErrorIs(t, err, ErrUnauthorized)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertNotCalled(t, "GetObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("cannot get object because object metadata not found", func(t *testing.T) {
+		t.Parallel()
+		mockMetadata, mockObjectMetadata, objectStorage := setupObjectTest(t)
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Public}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "missing.png").
+			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "missing.png")
+
+		assert.ErrorIs(t, err, ErrObjectNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot get object because file not found on disk", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
+
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
+			Return(object, nil).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+
+		assert.ErrorIs(t, err, ErrObjectNotFound)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("cannot get object, something went wrong reading from disk", func(t *testing.T) {
+		t.Parallel()
+		entry := filepath.Join(t.TempDir(), "entry")
+		require.NoError(t, os.WriteFile(entry, []byte("x"), 0o644))
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), new(MockChecksum), discardLogger())
+
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash"}
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
+			Return(object, nil).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+
+		assert.ErrorIs(t, err, ErrInternal)
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+	})
+
+	t.Run("success get object from public bucket", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: checksumOf("HELLO,WORLD")}
+		file := filepath.Join(entry, "public", object.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
+			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
+
+		rc, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		require.NoError(t, err)
+		defer rc.Close()
+
+		got, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, "HELLO,WORLD", string(got))
+		mockMetadata.AssertExpectations(t)
+		mockObjectMetadata.AssertExpectations(t)
+		mockChecksum.AssertExpectations(t)
+	})
+
+	t.Run("cannot get object because checksum mismatch", func(t *testing.T) {
+		t.Parallel()
+		entry := t.TempDir()
+		bucket := model.Bucket{ID: "bucket-1", Name: "avatars", OwnerID: "user-123", Visibility: model.Public}
+		object := model.Object{ID: "object-1", BucketID: bucket.ID, Key: "haaland.png", Path: "some/hash",
+			Sha256sum: "0000000000000000000000000000000000000000000000000000000000000000"}
+		file := filepath.Join(entry, "public", object.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte("HELLO,WORLD"), 0o644))
+
+		mockMetadata := new(MockBucketMetadataRepository)
+		mockObjectMetadata := new(MockObjectMetadataRepository)
+		mockChecksum := new(MockChecksum)
+		objectStorage := NewObjectStorage(mockMetadata, mockObjectMetadata, disk.NewDisk(entry), mockChecksum, discardLogger())
+
+		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
+			Return(bucket, nil).Once()
+		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
+			Return(object, nil).Once()
+		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
+
+		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrChecksumMismatch)
 		mockMetadata.AssertExpectations(t)

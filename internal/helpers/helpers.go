@@ -63,6 +63,17 @@ func GenerateSHA256() Hash {
 	return &sha256Hash{hasher: sha256.New()}
 }
 
+type sha256Factory struct{}
+
+func (sha256Factory) Hash() Hash { return GenerateSHA256() }
+
+// NewSha256Factory returns a CheckSummer that yields a fresh sha256 Hash per
+// call. Object storage expects a one-shot hash per use, so it must be given a
+// factory rather than a single Hash instance.
+func NewSha256Factory() CheckSummer {
+	return sha256Factory{}
+}
+
 type sha256Hash struct {
 	hasher hash.Hash
 }

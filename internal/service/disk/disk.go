@@ -23,7 +23,16 @@ var (
 	ErrSubdirectoryRequired = errors.New("subdirectory is required")
 	ErrFileNotFound         = errors.New("file not found")
 	ErrDirectoryNotFound    = errors.New("directory not found")
+	ErrLinkTargetExists     = errors.New("link target already exists")
+	ErrLinkNotFound         = errors.New("link not found")
+	ErrNameRequired         = errors.New("name is required")
 )
+
+// publicRoot returns the public directory used as the target namespace for
+// symlinks that expose objects without leaking the owner's account directory.
+func (d *Disk) publicRoot() string {
+	return filepath.Join(d.entrypoint, "public")
+}
 
 func NewDisk(entrypoint string) *Disk {
 	return &Disk{
@@ -123,4 +132,66 @@ func (d *Disk) Delete(directory, path string) error {
 		return err
 	}
 	return nil
+}
+
+// Link exposes the directory at <entrypoint>/<source> through the public
+// namespace by creating a symlink at <entrypoint>/public/<name> pointing at
+// it. Keeping the public name distinct from the source lets callers hide the
+// owner-specific location (e.g. link an owner/bucket directory under the bare
+// bucket hash). Linking is idempotent: an existing symlink at the target is
+// left untouched; a regular file or directory occupying the target path is
+// reported as ErrLinkTargetExists.
+func (d *Disk) Link(source, name string) error {
+	if source == "" {
+		return ErrDirectoryRequired
+	}
+	if name == "" {
+		return ErrNameRequired
+	}
+
+	src := filepath.Join(d.entrypoint, source)
+	target := filepath.Join(d.publicRoot(), name)
+
+	info, err := os.Lstat(target)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		return ErrLinkTargetExists
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+
+	return os.Symlink(src, target)
+}
+
+// Unlink removes the symlink at <entrypoint>/public/<name>, taking the named
+// asset out of the public namespace without touching the real directory it
+// points to. A missing link is reported as ErrLinkNotFound; a regular file or
+// directory occupying the target path is left untouched and reported as
+// ErrLinkTargetExists.
+func (d *Disk) Unlink(name string) error {
+	if name == "" {
+		return ErrNameRequired
+	}
+
+	target := filepath.Join(d.publicRoot(), name)
+
+	info, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ErrLinkNotFound
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return ErrLinkTargetExists
+	}
+
+	return os.Remove(target)
 }

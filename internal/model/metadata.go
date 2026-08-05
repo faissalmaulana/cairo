@@ -14,12 +14,13 @@ const (
 )
 
 type Bucket struct {
-	ID        string
-	Name      string
-	OwnerID   string
-	Visibilty BucketVisibility
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         string
+	Name       string
+	OwnerID    string
+	Visibility BucketVisibility
+	BucketHash string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type Object struct {
@@ -34,5 +35,5 @@ type Object struct {
 }
 
 type UpdateBucketInput struct {
-	Visibilty *BucketVisibility
+	Visibility *BucketVisibility
 }

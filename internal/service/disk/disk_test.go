@@ -260,3 +260,161 @@ func TestListError(t *testing.T) {
 		assert.EqualError(t, err, "directory not found")
 	})
 }
+
+func TestLink(t *testing.T) {
+
+	t.Run("creates a public symlink to the directory", func(t *testing.T) {
+
+		entry := t.TempDir()
+		dir := filepath.Join(entry, "user-123", "avatars")
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0o644))
+
+		d := disk.NewDisk(entry)
+
+		require.NoError(t, d.Link("user-123", "user-123"))
+
+		target := filepath.Join(entry, "public", "user-123")
+		info, err := os.Lstat(target)
+		require.NoError(t, err)
+		assert.True(t, info.Mode()&os.ModeSymlink != 0, "target should be a symlink")
+
+		// Reading through the public link reaches the real content.
+		got, err := os.ReadFile(filepath.Join(target, "avatars", "a.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, "data", string(got))
+	})
+
+	t.Run("public name can hide the parent directory", func(t *testing.T) {
+
+		entry := t.TempDir()
+		dir := filepath.Join(entry, "user-123", "abc123")
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0o644))
+
+		d := disk.NewDisk(entry)
+
+		require.NoError(t, d.Link(filepath.Join("user-123", "abc123"), "abc123"))
+
+		target := filepath.Join(entry, "public", "abc123")
+		info, err := os.Lstat(target)
+		require.NoError(t, err)
+		assert.True(t, info.Mode()&os.ModeSymlink != 0, "target should be a symlink")
+		_, err = os.Lstat(filepath.Join(entry, "public", "user-123"))
+		assert.True(t, os.IsNotExist(err), "owner directory must not appear under public")
+
+		// Reading through the public link reaches the real content.
+		got, err := os.ReadFile(filepath.Join(target, "a.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, "data", string(got))
+	})
+
+	t.Run("is idempotent when the symlink already exists", func(t *testing.T) {
+
+		entry := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "user-123"), 0o755))
+
+		d := disk.NewDisk(entry)
+
+		require.NoError(t, d.Link("user-123", "user-123"))
+		require.NoError(t, d.Link("user-123", "user-123"))
+	})
+
+	t.Run("fails when a real path already occupies the target", func(t *testing.T) {
+
+		entry := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "user-123"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "public", "user-123"), 0o755))
+
+		d := disk.NewDisk(entry)
+
+		err := d.Link("user-123", "user-123")
+		assert.EqualError(t, err, "link target already exists")
+	})
+
+	t.Run("fails when source directory is empty", func(t *testing.T) {
+
+		d := disk.NewDisk(t.TempDir())
+
+		err := d.Link("", "user-123")
+		assert.EqualError(t, err, "directory is required")
+	})
+
+	t.Run("fails when public name is empty", func(t *testing.T) {
+
+		d := disk.NewDisk(t.TempDir())
+
+		err := d.Link("user-123", "")
+		assert.EqualError(t, err, "name is required")
+	})
+}
+
+func TestUnlink(t *testing.T) {
+
+	t.Run("removes the public symlink but keeps the real directory", func(t *testing.T) {
+
+		entry := t.TempDir()
+		dir := filepath.Join(entry, "user-123")
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+
+		d := disk.NewDisk(entry)
+		require.NoError(t, d.Link("user-123", "user-123"))
+
+		require.NoError(t, d.Unlink("user-123"))
+
+		_, err := os.Lstat(filepath.Join(entry, "public", "user-123"))
+		assert.True(t, os.IsNotExist(err), "public link should be gone")
+
+		// Real directory is untouched.
+		info, err := os.Stat(dir)
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("removes the link keyed by public name regardless of source", func(t *testing.T) {
+
+		entry := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "user-123", "abc123"), 0o755))
+
+		d := disk.NewDisk(entry)
+		require.NoError(t, d.Link(filepath.Join("user-123", "abc123"), "abc123"))
+
+		require.NoError(t, d.Unlink("abc123"))
+
+		_, err := os.Lstat(filepath.Join(entry, "public", "abc123"))
+		assert.True(t, os.IsNotExist(err), "public link should be gone")
+	})
+
+	t.Run("fails when the link does not exist", func(t *testing.T) {
+
+		d := disk.NewDisk(t.TempDir())
+
+		err := d.Unlink("user-123")
+		assert.EqualError(t, err, "link not found")
+	})
+
+	t.Run("fails when a real path occupies the target", func(t *testing.T) {
+
+		entry := t.TempDir()
+		// not a link
+		require.NoError(t, os.MkdirAll(filepath.Join(entry, "public", "user-123"), 0o755))
+
+		d := disk.NewDisk(entry)
+
+		err := d.Unlink("user-123")
+		assert.EqualError(t, err, "link target already exists")
+
+		// The real directory is not removed.
+		info, err := os.Stat(filepath.Join(entry, "public", "user-123"))
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("fails when name is empty", func(t *testing.T) {
+
+		d := disk.NewDisk(t.TempDir())
+
+		err := d.Unlink("")
+		assert.EqualError(t, err, "name is required")
+	})
+}

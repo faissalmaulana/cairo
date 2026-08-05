@@ -30,9 +30,9 @@ type DeleteBucketInput struct {
 }
 
 type SetBucketVisibilityInput struct {
-	Name      string
-	OwnerID   string
-	Visibilty model.BucketVisibility
+	Name       string
+	OwnerID    string
+	Visibility model.BucketVisibility
 }
 
 type UploadObjectInput struct {
@@ -119,9 +119,9 @@ func (oe *ObjectStorage) CreateBucket(ctx context.Context, newBucket CreateBucke
 	}
 
 	bucketID, err := oe.bucketDB.CreateBucket(ctx, model.Bucket{
-		Name:      newBucket.Name,
-		OwnerID:   newBucket.OwnerID,
-		Visibilty: model.Private,
+		Name:       newBucket.Name,
+		OwnerID:    newBucket.OwnerID,
+		Visibility: model.Private,
 	})
 	if err != nil {
 		oe.logError(ctx, err)
@@ -194,7 +194,7 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 		return ErrOwnerIDRequired
 	}
 
-	_, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
+	bucket, err := oe.bucketDB.GetBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -206,13 +206,53 @@ func (oe *ObjectStorage) SetBucketVisibility(ctx context.Context, input SetBucke
 	}
 
 	err = oe.bucketDB.UpdateBucket(ctx, input.Name, input.OwnerID, model.UpdateBucketInput{
-		Visibilty: &input.Visibilty,
+		Visibility: &input.Visibility,
 	})
 	if err != nil {
 		oe.logError(ctx, err)
 		return ErrInternal
 	}
 
+	if input.Visibility == model.Public {
+		if err := oe.linkBucket(ctx, bucket); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := oe.unlinkBucket(ctx, bucket); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// bucketHash returns the persisted bucket hash, falling back to deriving it
+// from the bucket's ID for rows created before the hash was stored.
+func bucketHash(bucket model.Bucket) string {
+	if bucket.BucketHash != "" {
+		return bucket.BucketHash
+	}
+	return helpers.HashName(bucket.ID)
+}
+
+// linkBucket exposes the bucket's directory through the public namespace under
+// its bare bucket hash, so objects can be read publicly without revealing the
+// owner's account directory.
+func (oe *ObjectStorage) linkBucket(ctx context.Context, bucket model.Bucket) error {
+	if err := oe.disk.Link(filepath.Join(bucket.OwnerID, bucketHash(bucket)), bucketHash(bucket)); err != nil {
+		oe.logError(ctx, err)
+		return ErrInternal
+	}
+	return nil
+}
+
+// unlinkBucket removes the bucket's directory from the public namespace.
+func (oe *ObjectStorage) unlinkBucket(ctx context.Context, bucket model.Bucket) error {
+	if err := oe.disk.Unlink(bucketHash(bucket)); err != nil {
+		oe.logError(ctx, err)
+		return ErrInternal
+	}
 	return nil
 }
 
@@ -245,7 +285,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 
 	hash := oe.checksum.Hash()
 	cr := &countingReader{src: io.TeeReader(input.Content, hash)}
-	hashedBucketID := helpers.HashName(bucket.ID)
+	hashedBucketID := bucketHash(bucket)
 	hashedKey := helpers.HashName(input.Name)
 
 	if code, err := oe.disk.Write(disk.DataInput{
@@ -276,8 +316,13 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	return objectID, nil
 }
 
+// This for getting private object
 func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, error) {
-	buck, err := oe.bucketDB.GetBucketByName(ctx, input.BucketName)
+	if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
+		return nil, ErrOwnerIDRequired
+	}
+
+	buck, err := oe.bucketDB.GetBucket(ctx, input.BucketName, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
@@ -285,15 +330,6 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 		default:
 			oe.logError(ctx, err)
 			return nil, ErrInternal
-		}
-	}
-
-	if buck.Visibilty == model.Private {
-		if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
-			return nil, ErrOwnerIDRequired
-		}
-		if buck.OwnerID != input.OwnerID {
-			return nil, ErrUnauthorized
 		}
 	}
 
@@ -312,6 +348,51 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 			return nil, ErrInternal
 		}
 	}
+
+	return oe.verifyAndBuffer(ctx, rc, objectMetadata)
+}
+
+// GetPublicObject returns an object from a public bucket without requiring an
+// owner's account id.
+func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name string) (io.ReadCloser, error) {
+	bucket, err := oe.bucketDB.GetBucketByName(ctx, bucketName)
+	if err != nil {
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			return nil, ErrBucketNotFound
+		default:
+			oe.logError(ctx, err)
+			return nil, ErrInternal
+		}
+	}
+
+	if bucket.Visibility != model.Public {
+		return nil, ErrUnauthorized
+	}
+
+	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, bucket.OwnerID, name)
+	if err != nil {
+		return nil, ErrObjectNotFound
+	}
+
+	rc, err := oe.disk.Read("public", objectMetadata.Path)
+	if err != nil {
+		switch {
+		case errors.Is(err, disk.ErrFileNotFound), errors.Is(err, disk.ErrDirectoryNotFound):
+			return nil, ErrObjectNotFound
+		default:
+			oe.logError(ctx, err)
+			return nil, ErrInternal
+		}
+	}
+
+	return oe.verifyAndBuffer(ctx, rc, objectMetadata)
+}
+
+// verifyAndBuffer reads an object stream in full, recomputing and comparing its
+// sha256 against the stored checksum, and returns the verified content buffered
+// in memory. Callers are expected to close the returned stream.
+func (oe *ObjectStorage) verifyAndBuffer(ctx context.Context, rc io.ReadCloser, objectMetadata model.Object) (io.ReadCloser, error) {
 	defer rc.Close()
 
 	hash := oe.checksum.Hash()

@@ -770,11 +770,12 @@ func TestUploadObject(t *testing.T) {
 			Return(bucket, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 		mockObjectMetadata.On("CreateObject", mock.Anything, model.Object{
-			BucketID:  bucket.ID,
-			Key:       input.Name,
-			Path:      filepath.Join(hashedBucketID, hashedKey),
-			Size:      len("HELLO,WORLD"),
-			Sha256sum: checksumOf("HELLO,WORLD"),
+			BucketID:    bucket.ID,
+			Key:         input.Name,
+			Path:        filepath.Join(hashedBucketID, hashedKey),
+			Size:        len("HELLO,WORLD"),
+			Sha256sum:   checksumOf("HELLO,WORLD"),
+			ContentType: "image/png",
 		}).Return("", assert.AnError).Once()
 
 		_, err := objectStorage.UploadObject(context.Background(), input)
@@ -809,11 +810,12 @@ func TestUploadObject(t *testing.T) {
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
 		mockObjectMetadata.On("CreateObject", mock.Anything, model.Object{
-			BucketID:  bucket.ID,
-			Key:       input.Name,
-			Path:      filepath.Join(hashedBucketID, hashedKey),
-			Size:      len("HELLO,WORLD"),
-			Sha256sum: checksumOf("HELLO,WORLD"),
+			BucketID:    bucket.ID,
+			Key:         input.Name,
+			Path:        filepath.Join(hashedBucketID, hashedKey),
+			Size:        len("HELLO,WORLD"),
+			Sha256sum:   checksumOf("HELLO,WORLD"),
+			ContentType: "image/png",
 		}).Return(expectedObjectID, nil).Once()
 
 		objectID, err := objectStorage.UploadObject(context.Background(), input)
@@ -842,7 +844,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrBucketNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -861,7 +863,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 		mockMetadata.On("GetBucket", mock.Anything, input.BucketName, input.OwnerID).
 			Return(model.Bucket{}, assert.AnError).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrInternal)
 		mockMetadata.AssertExpectations(t)
@@ -877,7 +879,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 			Name:       "haaland.png",
 		}
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrOwnerIDRequired)
 		mockMetadata.AssertExpectations(t)
@@ -901,7 +903,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrObjectNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -929,7 +931,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrObjectNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -959,7 +961,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, input.Name).
 			Return(object, nil).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrInternal)
 		mockMetadata.AssertExpectations(t)
@@ -993,7 +995,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 			Return(object, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
-		rc, err := objectStorage.GetObject(context.Background(), input)
+		rc, _, err := objectStorage.GetObject(context.Background(), input)
 		require.NoError(t, err)
 		defer rc.Close()
 
@@ -1032,7 +1034,7 @@ func TestGetPrivatePrObject(t *testing.T) {
 			Return(object, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
-		_, err := objectStorage.GetObject(context.Background(), input)
+		_, _, err := objectStorage.GetObject(context.Background(), input)
 
 		assert.ErrorIs(t, err, ErrChecksumMismatch)
 		mockMetadata.AssertExpectations(t)
@@ -1049,7 +1051,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
 			Return(model.Bucket{}, metadata.ErrBucketNotFound).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrBucketNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -1063,7 +1065,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
 			Return(model.Bucket{}, assert.AnError).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrInternal)
 		mockMetadata.AssertExpectations(t)
@@ -1078,7 +1080,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockMetadata.On("GetBucketByName", mock.Anything, "avatars").
 			Return(bucket, nil).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrUnauthorized)
 		mockMetadata.AssertExpectations(t)
@@ -1095,7 +1097,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "missing.png").
 			Return(model.Object{}, metadata.ErrObjectNotFound).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "missing.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "missing.png")
 
 		assert.ErrorIs(t, err, ErrObjectNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -1117,7 +1119,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
 			Return(object, nil).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrObjectNotFound)
 		mockMetadata.AssertExpectations(t)
@@ -1141,7 +1143,7 @@ func TestGetPublicObject(t *testing.T) {
 		mockObjectMetadata.On("GetObject", mock.Anything, bucket.ID, bucket.OwnerID, "haaland.png").
 			Return(object, nil).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrInternal)
 		mockMetadata.AssertExpectations(t)
@@ -1169,7 +1171,7 @@ func TestGetPublicObject(t *testing.T) {
 			Return(object, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
-		rc, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		rc, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 		require.NoError(t, err)
 		defer rc.Close()
 
@@ -1202,7 +1204,7 @@ func TestGetPublicObject(t *testing.T) {
 			Return(object, nil).Once()
 		mockChecksum.On("Hash").Return(helpers.GenerateSHA256()).Once()
 
-		_, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
+		_, _, err := objectStorage.GetPublicObject(context.Background(), "avatars", "haaland.png")
 
 		assert.ErrorIs(t, err, ErrChecksumMismatch)
 		mockMetadata.AssertExpectations(t)

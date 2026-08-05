@@ -29,7 +29,7 @@ func (or *SQLiteObjectRepository) WithTx(tx *sql.Tx) *SQLiteObjectRepository {
 	}
 }
 
-const objectColumns = `o.id,o.bucket_id,o.key,o.path,o.size,o.sha256sum`
+const objectColumns = `o.id,o.bucket_id,o.key,o.path,o.size,o.sha256sum,o.content_type`
 
 // objectScopeQuery joins objects to their bucket so lookups can be restricted
 // to buckets owned by ownerID.
@@ -45,6 +45,7 @@ func scanObject(row *sql.Row) (model.Object, error) {
 		&obj.Path,
 		&obj.Size,
 		&obj.Sha256sum,
+		&obj.ContentType,
 	)
 	if err != nil {
 		return model.Object{}, err
@@ -56,7 +57,7 @@ func scanObject(row *sql.Row) (model.Object, error) {
 func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model.Object) (string, error) {
 	id := uuid.NewString()
 
-	query := `INSERT INTO objects(id,bucket_id,key,path,size,sha256sum) VALUES(?,?,?,?,?,?)`
+	query := `INSERT INTO objects(id,bucket_id,key,path,size,sha256sum,content_type) VALUES(?,?,?,?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -70,6 +71,7 @@ func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model
 		object.Path,
 		object.Size,
 		object.Sha256sum,
+		object.ContentType,
 	)
 	if err != nil {
 		return "", err
@@ -118,6 +120,7 @@ func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID, own
 			&obj.Path,
 			&obj.Size,
 			&obj.Sha256sum,
+			&obj.ContentType,
 		); err != nil {
 			return nil, err
 		}

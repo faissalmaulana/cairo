@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/faissalmaulana/cairo/internal/handler"
@@ -241,6 +242,8 @@ func TestDeletePublicBucketRemovesPublicAccess(t *testing.T) {
 	// The object is reachable in the public namespace before deletion.
 	w := doRequest(t, router, http.MethodGet, publicObjectPath("public-delete", "share.txt"), "", nil)
 	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "text/plain; charset=utf-8", w.Header().Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(len(content)), w.Header().Get("Content-Length"))
 	require.Equal(t, content, w.Body.Bytes())
 
 	// Deleting the bucket must revoke public access.
@@ -287,7 +290,8 @@ func TestUploadAndDownloadObject(t *testing.T) {
 
 	down := doRequest(t, router, http.MethodGet, objectPath(auth.AccountID, "files", "note.txt"), auth.APIKey, nil)
 	require.Equal(t, http.StatusOK, down.Code)
-	require.Equal(t, "application/octet-stream", down.Header().Get("Content-Type"))
+	require.Equal(t, "text/plain; charset=utf-8", down.Header().Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(len(content)), down.Header().Get("Content-Length"))
 	require.Equal(t, content, down.Body.Bytes())
 }
 
@@ -397,10 +401,12 @@ func TestPublicObjectAccess(t *testing.T) {
 	content := []byte("publicly readable bytes")
 	require.Equal(t, http.StatusCreated, doUpload(t, router, http.MethodPut, objectPath(auth.AccountID, "public-assets", "readme.txt"), auth.APIKey, "readme.txt", content).Code)
 
-	// Public buckets are served with no account id and no api key.
+	// Public buckets are served with no account id and no api key, carrying the
+	// content type persisted from the key's extension.
 	w := doRequest(t, router, http.MethodGet, publicObjectPath("public-assets", "readme.txt"), "", nil)
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, "application/octet-stream", w.Header().Get("Content-Type"))
+	require.Equal(t, "text/plain; charset=utf-8", w.Header().Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(len(content)), w.Header().Get("Content-Length"))
 	require.Equal(t, content, w.Body.Bytes())
 
 	// Nested keys survive on the public route too.
@@ -408,6 +414,8 @@ func TestPublicObjectAccess(t *testing.T) {
 	require.Equal(t, http.StatusCreated, doUpload(t, router, http.MethodPut, objectPath(auth.AccountID, "public-assets", "dir/sub/file.txt"), auth.APIKey, "file.txt", nested).Code)
 	w = doRequest(t, router, http.MethodGet, publicObjectPath("public-assets", "dir/sub/file.txt"), "", nil)
 	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "text/plain; charset=utf-8", w.Header().Get("Content-Type"))
+	require.Equal(t, strconv.Itoa(len(nested)), w.Header().Get("Content-Length"))
 	require.Equal(t, nested, w.Body.Bytes())
 
 	// A missing object on a public bucket is a normal not-found.

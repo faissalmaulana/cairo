@@ -29,9 +29,10 @@ type Object struct {
 	BucketID string
 	Key      string
 	// path is the combination of bucketID and key as filepath
-	Path      string
-	Size      int
-	Sha256sum string
+	Path        string
+	Size        int
+	Sha256sum   string
+	ContentType string
 }
 
 type UpdateBucketInput struct {

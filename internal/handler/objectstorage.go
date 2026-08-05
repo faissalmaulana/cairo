@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -220,7 +221,7 @@ func (oh *ObjectStorageHandler) UploadObject(c *gin.Context) {
 }
 
 func (oh *ObjectStorageHandler) GetObject(c *gin.Context) {
-	rc, err := oh.objectStorage.GetObject(c.Request.Context(), objectstorage.DownloadObjectInput{
+	rc, object, err := oh.objectStorage.GetObject(c.Request.Context(), objectstorage.DownloadObjectInput{
 		BucketName: c.Param("bucket_name"),
 		OwnerID:    c.Param("account_id"),
 		Name:       objectKey(c),
@@ -229,34 +230,37 @@ func (oh *ObjectStorageHandler) GetObject(c *gin.Context) {
 		oh.handleObjectStorageError(c, err)
 		return
 	}
-	defer rc.Close()
 
-	data, err := io.ReadAll(rc)
-	if err != nil {
-		FailError(c, ErrInternalServer)
-		return
-	}
-
-	c.Data(http.StatusOK, "application/octet-stream", data)
+	oh.streamObject(c, rc, object)
 }
 
 // GetPublicObject serves an object from a public bucket without requiring an
 // account id or api key. Access is granted purely by the bucket's visibility.
 func (oh *ObjectStorageHandler) GetPublicObject(c *gin.Context) {
-	rc, err := oh.objectStorage.GetPublicObject(c.Request.Context(), c.Param("bucket_name"), objectKey(c))
+	rc, object, err := oh.objectStorage.GetPublicObject(c.Request.Context(), c.Param("bucket_name"), objectKey(c))
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
 		return
 	}
+
+	oh.streamObject(c, rc, object)
+}
+
+// streamObject writes a verified object stream directly to the response
+// without buffering the whole body in the handler. The content type comes
+// from the stored object metadata; content length from the persisted size.
+func (oh *ObjectStorageHandler) streamObject(c *gin.Context, rc io.ReadCloser, object model.Object) {
 	defer rc.Close()
 
-	data, err := io.ReadAll(rc)
-	if err != nil {
+	header := c.Writer.Header()
+	header.Set("Content-Type", object.ContentType)
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Content-Length", strconv.Itoa(object.Size))
+
+	if _, err := io.Copy(c.Writer, rc); err != nil {
 		FailError(c, ErrInternalServer)
 		return
 	}
-
-	c.Data(http.StatusOK, "application/octet-stream", data)
 }
 
 func (oh *ObjectStorageHandler) DeleteObject(c *gin.Context) {

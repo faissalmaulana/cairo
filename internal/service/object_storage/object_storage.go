@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"path/filepath"
 
 	"github.com/faissalmaulana/cairo/internal/helpers"
@@ -245,6 +246,15 @@ func bucketHash(bucket model.Bucket) string {
 	return helpers.HashName(bucket.ID)
 }
 
+// lookupContentType derives a MIME type from the object key's extension, falling
+// back to application/octet-stream when it cannot be determined.
+func lookupContentType(key string) string {
+	if ct := mime.TypeByExtension(filepath.Ext(key)); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
 // linkBucket exposes the bucket's directory through the public namespace under
 // its bare bucket hash, so objects can be read publicly without revealing the
 // owner's account directory.
@@ -296,6 +306,7 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	cr := &countingReader{src: io.TeeReader(input.Content, hash)}
 	hashedBucketID := bucketHash(bucket)
 	hashedKey := helpers.HashName(input.Name)
+	contentType := lookupContentType(input.Name)
 
 	if code, err := oe.disk.Write(disk.DataInput{
 		Src:          cr,
@@ -310,11 +321,12 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 	checksum := hash.Sum()
 
 	objectID, err := oe.objectDB.CreateObject(ctx, model.Object{
-		BucketID:  bucket.ID,
-		Key:       input.Name,
-		Path:      filepath.Join(hashedBucketID, hashedKey),
-		Size:      int(cr.n),
-		Sha256sum: checksum,
+		BucketID:    bucket.ID,
+		Key:         input.Name,
+		Path:        filepath.Join(hashedBucketID, hashedKey),
+		Size:        int(cr.n),
+		Sha256sum:   checksum,
+		ContentType: contentType,
 	})
 
 	if err != nil {
@@ -326,76 +338,81 @@ func (oe *ObjectStorage) UploadObject(ctx context.Context, input UploadObjectInp
 }
 
 // This for getting private object
-func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, error) {
+func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInput) (io.ReadCloser, model.Object, error) {
 	if err := helpers.ValidateOwnerID(input.OwnerID); err != nil {
-		return nil, ErrOwnerIDRequired
+		return nil, model.Object{}, ErrOwnerIDRequired
 	}
 
 	buck, err := oe.bucketDB.GetBucket(ctx, input.BucketName, input.OwnerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
-			return nil, ErrBucketNotFound
+			return nil, model.Object{}, ErrBucketNotFound
 		default:
 			oe.logError(ctx, err)
-			return nil, ErrInternal
+			return nil, model.Object{}, ErrInternal
 		}
 	}
 
 	objectMetadata, err := oe.objectDB.GetObject(ctx, buck.ID, buck.OwnerID, input.Name)
 	if err != nil {
-		return nil, ErrObjectNotFound
+		return nil, model.Object{}, ErrObjectNotFound
 	}
 
 	rc, err := oe.disk.Read(buck.OwnerID, objectMetadata.Path)
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound):
-			return nil, ErrObjectNotFound
+			return nil, model.Object{}, ErrObjectNotFound
 		default:
 			oe.logError(ctx, err)
-			return nil, ErrInternal
+			return nil, model.Object{}, ErrInternal
 		}
 	}
 
-	return oe.verifyAndBuffer(ctx, rc, objectMetadata)
+	verified, err := oe.verifyAndBuffer(ctx, rc, objectMetadata)
+	return verified, objectMetadata, err
 }
 
 // GetPublicObject returns an object from a public bucket without requiring an
-// owner's account id.
-func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name string) (io.ReadCloser, error) {
+// owner's account id. Access is granted purely by the bucket's visibility; the
+// file is read through the public symlink namespace so the owner's directory is
+// never used to locate it. The verified bytes are streamed back together with
+// the stored object metadata (including its persisted content type).
+func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name string) (io.ReadCloser, model.Object, error) {
 	bucket, err := oe.bucketDB.GetBucketByName(ctx, bucketName)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
-			return nil, ErrBucketNotFound
+			return nil, model.Object{}, ErrBucketNotFound
 		default:
 			oe.logError(ctx, err)
-			return nil, ErrInternal
+			return nil, model.Object{}, ErrInternal
 		}
 	}
 
 	if bucket.Visibility != model.Public {
-		return nil, ErrUnauthorized
+		return nil, model.Object{}, ErrUnauthorized
 	}
 
 	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, bucket.OwnerID, name)
 	if err != nil {
-		return nil, ErrObjectNotFound
+		return nil, model.Object{}, ErrObjectNotFound
 	}
 
 	rc, err := oe.disk.Read("public", objectMetadata.Path)
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound), errors.Is(err, disk.ErrDirectoryNotFound):
-			return nil, ErrObjectNotFound
+			return nil, model.Object{}, ErrObjectNotFound
 		default:
 			oe.logError(ctx, err)
-			return nil, ErrInternal
+			return nil, model.Object{}, ErrInternal
 		}
 	}
 
-	return oe.verifyAndBuffer(ctx, rc, objectMetadata)
+	verified, err := oe.verifyAndBuffer(ctx, rc, objectMetadata)
+	return verified, objectMetadata, err
 }
 
 // verifyAndBuffer reads an object stream in full, recomputing and comparing its

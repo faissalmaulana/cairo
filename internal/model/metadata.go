@@ -14,12 +14,13 @@ const (
 )
 
 type Bucket struct {
-	ID        string
-	Name      string
-	OwnerID   string
-	Visibilty BucketVisibility
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         string
+	Name       string
+	OwnerID    string
+	Visibility BucketVisibility
+	BucketHash string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type Object struct {
@@ -28,11 +29,12 @@ type Object struct {
 	BucketID string
 	Key      string
 	// path is the combination of bucketID and key as filepath
-	Path      string
-	Size      int
-	Sha256sum string
+	Path        string
+	Size        int
+	Sha256sum   string
+	ContentType string
 }
 
 type UpdateBucketInput struct {
-	Visibilty *BucketVisibility
+	Visibility *BucketVisibility
 }

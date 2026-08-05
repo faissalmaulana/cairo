@@ -5,8 +5,7 @@ import "time"
 type ApiKey struct {
 	ID         string
 	UserID     string
-	KeyHash    string `json:"-"`
-	Prefix     string
+	Key        string
 	LastUsedAt *time.Time
 	CreatedAt  time.Time
 }

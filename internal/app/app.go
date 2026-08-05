@@ -18,24 +18,26 @@ import (
 )
 
 type Application struct {
-	userHandler       *handler.UserHandler
-	apiKeyHandler     *handler.ApiKeyHandler
-	authMiddleware    *middleware.AuthMiddleware
-	apiKeyMiddleware  *middleware.ApiKeyMiddleware
-	addr              string
-	readHeaderTimeout time.Duration
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	idleTimeout       time.Duration
-	mode              string
-	health            handler.HealthChecker
-	healthAddr        string
-	logger            *slog.Logger
+	userHandler          *handler.UserHandler
+	apiKeyHandler        *handler.ApiKeyHandler
+	objectStorageHandler *handler.ObjectStorageHandler
+	authMiddleware       *middleware.AuthMiddleware
+	apiKeyMiddleware     *middleware.ApiKeyMiddleware
+	addr                 string
+	readHeaderTimeout    time.Duration
+	readTimeout          time.Duration
+	writeTimeout         time.Duration
+	idleTimeout          time.Duration
+	mode                 string
+	health               handler.HealthChecker
+	healthAddr           string
+	logger               *slog.Logger
 }
 
 func New(
 	userHandler *handler.UserHandler,
 	apiKeyHandler *handler.ApiKeyHandler,
+	objectStorageHandler *handler.ObjectStorageHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	apiKeyMiddleware *middleware.ApiKeyMiddleware,
 	addr string,
@@ -47,19 +49,20 @@ func New(
 ) *Application {
 
 	return &Application{
-		userHandler:       userHandler,
-		apiKeyHandler:     apiKeyHandler,
-		authMiddleware:    authMiddleware,
-		apiKeyMiddleware:  apiKeyMiddleware,
-		addr:              addr,
-		readHeaderTimeout: readHeaderTimeout,
-		readTimeout:       readTimeout,
-		writeTimeout:      writeTimeout,
-		idleTimeout:       idleTimeout,
-		mode:              mode,
-		health:            health,
-		healthAddr:        healthAddr,
-		logger:            logger,
+		userHandler:          userHandler,
+		apiKeyHandler:        apiKeyHandler,
+		objectStorageHandler: objectStorageHandler,
+		authMiddleware:       authMiddleware,
+		apiKeyMiddleware:     apiKeyMiddleware,
+		addr:                 addr,
+		readHeaderTimeout:    readHeaderTimeout,
+		readTimeout:          readTimeout,
+		writeTimeout:         writeTimeout,
+		idleTimeout:          idleTimeout,
+		mode:                 mode,
+		health:               health,
+		healthAddr:           healthAddr,
+		logger:               logger,
 	}
 }
 
@@ -86,6 +89,28 @@ func (app *Application) Mux() http.Handler {
 			apiKeys.POST("", app.apiKeyHandler.Create)
 			apiKeys.GET("", app.apiKeyHandler.List)
 			apiKeys.DELETE("/:id", app.apiKeyHandler.Revoke)
+		}
+
+		accounts := v1.Group("/accounts/:account_id", app.apiKeyMiddleware.CheckApiKey, app.apiKeyMiddleware.RequireAccount)
+		{
+			accounts.GET("/buckets", app.objectStorageHandler.ListBuckets)
+			accounts.POST("/buckets", app.objectStorageHandler.CreateBucket)
+			accounts.GET("/buckets/:bucket_name", app.objectStorageHandler.GetBucket)
+			accounts.PATCH("/buckets/:bucket_name/visibility", app.objectStorageHandler.SetBucketVisibility)
+			accounts.DELETE("/buckets/:bucket_name", app.objectStorageHandler.DeleteBucket)
+
+			accounts.GET("/buckets/:bucket_name/objects", app.objectStorageHandler.ListObjects)
+			accounts.PUT("/buckets/:bucket_name/objects/*object_key", app.objectStorageHandler.UploadObject)
+			accounts.GET("/buckets/:bucket_name/objects/*object_key", app.objectStorageHandler.GetObject)
+			accounts.DELETE("/buckets/:bucket_name/objects/*object_key", app.objectStorageHandler.DeleteObject)
+		}
+
+		// Public object access: no account id, no api key. Access is granted
+		// by the bucket's visibility alone; the file is served from the public
+		// symlink namespace.
+		publicObjects := v1.Group("/public/buckets/:bucket_name/objects")
+		{
+			publicObjects.GET("/*object_key", app.objectStorageHandler.GetPublicObject)
 		}
 
 	}

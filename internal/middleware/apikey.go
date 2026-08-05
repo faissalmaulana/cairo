@@ -38,3 +38,16 @@ func (am *ApiKeyMiddleware) CheckApiKey(c *gin.Context) {
 	c.Set(helpers.ApiKeyIDKey, key.ID)
 	c.Next()
 }
+
+// RequireAccount ties the :account_id path param to the user authenticated by
+// the api key. Without it, callers could target another user's namespace (e.g.
+// with buckets.owner_id referencing users(id), a bogus account id surfaces as
+// a foreign-key 500 instead of a clean rejection).
+func (am *ApiKeyMiddleware) RequireAccount(c *gin.Context) {
+	if c.GetString(helpers.AuthUserIDKey) != c.Param("account_id") {
+		handler.FailError(c, handler.ErrAccountMismatch)
+		c.Abort()
+		return
+	}
+	c.Next()
+}

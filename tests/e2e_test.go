@@ -16,12 +16,16 @@ import (
 
 	"github.com/faissalmaulana/cairo/internal/app"
 	"github.com/faissalmaulana/cairo/internal/handler"
+	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/middleware"
 	"github.com/faissalmaulana/cairo/internal/migrations"
 	apikey_repository "github.com/faissalmaulana/cairo/internal/repository/apikey"
+	metadata_repository "github.com/faissalmaulana/cairo/internal/repository/metadata"
 	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
 	apikey_service "github.com/faissalmaulana/cairo/internal/service/apikey"
 	auth_service "github.com/faissalmaulana/cairo/internal/service/auth"
+	"github.com/faissalmaulana/cairo/internal/service/disk"
+	objectstorage "github.com/faissalmaulana/cairo/internal/service/object_storage"
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/redis/go-redis/v9"
@@ -106,9 +110,22 @@ func setupEnv(t *testing.T) http.Handler {
 	authMiddleware := middleware.NewAuthMiddleware(tokenSvc)
 	apiKeyMiddleware := middleware.NewApiKeyMiddleware(apiKeySvc)
 
+	storageRoot := setupStorageRoot(t)
+	bucketRepo := metadata_repository.NewSQLiteBucketRepository(db)
+	objectRepo := metadata_repository.NewSQLiteObjectRepository(db)
+	objectStorageSvc := objectstorage.NewObjectStorage(
+		bucketRepo,
+		objectRepo,
+		disk.NewDisk(storageRoot),
+		helpers.NewSha256Factory(),
+		logger,
+	)
+	objectStorageHandler := handler.NewObjectStorageHandler(objectStorageSvc)
+
 	application := app.New(
 		userHandler,
 		apiKeyHandler,
+		objectStorageHandler,
 		authMiddleware,
 		apiKeyMiddleware,
 		"",
@@ -122,6 +139,25 @@ func setupEnv(t *testing.T) http.Handler {
 	checkHealthDependency(t, application.HealthMux())
 	return application.Mux()
 
+}
+
+// setupStorageRoot creates a real directory to act as the object-storage disk
+// entrypoint for the test, verifying it is an existing directory and
+// registering cleanup so it is removed once the test finishes.
+func setupStorageRoot(t *testing.T) string {
+	t.Helper()
+
+	root := filepath.Join(t.TempDir(), "storage")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	info, err := os.Stat(root)
+	require.NoError(t, err)
+	require.True(t, info.IsDir(), "storage entrypoint should be a real directory")
+
+	t.Cleanup(func() {
+		require.NoError(t, os.RemoveAll(root))
+	})
+
+	return root
 }
 
 func checkHealthDependency(t *testing.T, router http.Handler) {

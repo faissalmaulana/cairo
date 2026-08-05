@@ -13,9 +13,12 @@ import (
 	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/middleware"
 	apikey_repository "github.com/faissalmaulana/cairo/internal/repository/apikey"
+	metadata_repository "github.com/faissalmaulana/cairo/internal/repository/metadata"
 	user_repository "github.com/faissalmaulana/cairo/internal/repository/user"
 	apikey_service "github.com/faissalmaulana/cairo/internal/service/apikey"
 	auth_service "github.com/faissalmaulana/cairo/internal/service/auth"
+	"github.com/faissalmaulana/cairo/internal/service/disk"
+	objectstorage "github.com/faissalmaulana/cairo/internal/service/object_storage"
 	token_service "github.com/faissalmaulana/cairo/internal/service/token"
 	user_service "github.com/faissalmaulana/cairo/internal/service/user"
 	"github.com/joho/godotenv"
@@ -83,9 +86,26 @@ func main() {
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeySvc)
 	apiKeyMiddleware := middleware.NewApiKeyMiddleware(apiKeySvc)
 
+	storageRoot := helpers.GetEnv("STORAGE_PATH", "storage")
+	if err := os.MkdirAll(storageRoot, 0o755); err != nil {
+		log.Fatal(err)
+	}
+
+	bucketRepo := metadata_repository.NewSQLiteBucketRepository(db)
+	objectRepo := metadata_repository.NewSQLiteObjectRepository(db)
+	objectStorageSvc := objectstorage.NewObjectStorage(
+		bucketRepo,
+		objectRepo,
+		disk.NewDisk(storageRoot),
+		helpers.NewSha256Factory(),
+		logger,
+	)
+	objectStorageHandler := handler.NewObjectStorageHandler(objectStorageSvc)
+
 	app := app.New(
 		userHandler,
 		apiKeyHandler,
+		objectStorageHandler,
 		authMiddleware,
 		apiKeyMiddleware,
 		helpers.GetEnv("SERVER_ADDR", "localhost:8080"),

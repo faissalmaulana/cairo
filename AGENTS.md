@@ -64,14 +64,14 @@ internal/
 
 ## object_storage gotchas
 
-- **Object files keyed by hash, stored by `Path`.** `UploadObject` hashes `bucket.ID` → `Subdirectory` and the object key → `Filename` (`helpers.HashName`, hex sha256), writing `<root>/<ownerID>/<hash(bucketID)>/<hash(key)>`, and stores that relative path in `model.Object.Path`. Download/Delete **must not recompute hashes** — they `GetObject`/get bucket then pass `object.Path` verbatim to `disk.Read`/`disk.Delete` with the owner as the directory (no `filepath.Base`/`Dir` splitting). `Object.Path` is built once at upload via `filepath.Join(hashedBucketID, hashedKey)`.
+- **Object files keyed by hash, stored by `Path`.** `UploadObject` hashes `bucket.ID` → `Subdirectory` and the object key → `Filename` (`helpers.HashName`, first 8 bytes of sha256, hex = 16 chars), writing `<root>/<ownerID>/<hash(bucketID)>/<hash(key)>`, and stores that relative path in `model.Object.Path`. Download/Delete **must not recompute hashes** — they `GetObject`/get bucket then pass `object.Path` verbatim to `disk.Read`/`disk.Delete` with the owner as the directory (no `filepath.Base`/`Dir` splitting). `Object.Path` is built once at upload via `filepath.Join(hashedBucketID, hashedKey)`.
 - **`GetObject` is not streaming.** It reads the whole object into memory, recomputes sha256, and compares against `object.Sha256sum` — mismatch → `ErrChecksumMismatch`. Private buckets require `OwnerID == bucket.OwnerID` (`ErrUnauthorized`); public buckets return without an owner.
-- **Misspelled field (by design, in use):** `Bucket.Visibilty` and `UpdateBucketInput.Visibilty` (missing second "i"; the `SetBucketVisibilityInput.Visibilty` field too). Write `Visibility` and it won't compile. Note `Object.ID` is **capital** `ID`.
+- **Visibility fields are spelled correctly:** `Bucket.Visibility`, `UpdateBucketInput.Visibility`, and `SetBucketVisibilityInput.Visibility`. Note `Object.ID` is **capital** `ID`.
 
 ## auth / apikey gotchas
 
 - JWT (HS256) `Claims` carry a `Type` (`access`/`refresh`) and a `jti`; access and refresh are validated against expected type. Refresh tokens are **single-use**: stored in Redis `refresh:<jti>` and consumed via `GetDel` (rotation) — a replayed old refresh token fails with `ErrRefreshRevoked`. Logout denylists the access `jti` until it expires.
-- API keys are stored as `KeyHash` + a `Prefix`; the middleware looks the key up by prefix/hash, never stores/compares raw keys.
+- API keys are stored as raw `key` (unique), no prefix and no hash; the middleware (`CheckApiKey`) looks the key up by exact match via `service.Validate` → `repo.GetByKey`. Revoking deletes the row. Signup auto-creates the first key and returns it in the `api_key` field; `GET /account/apikeys` returns the full keys.
 - All handlers respond via the shared envelope `handler.OK`/`handler.Fail`: `{"success": bool, "data"?: any, "error"?: {code, message}}`. Error **codes are string constants** in `internal/handler/errors.go` (e.g. `BAD_REQUEST`, `EMAIL_EXISTS`, `TOKEN_REQUIRED`, `INVALID_API_KEY`) — e2e tests assert on these, so don't rename them casually.
 - Gin context keys for authenticated identity: `helpers.AuthUserIDKey` (`"auth_user_id"`) and `helpers.ApiKeyIDKey` (`"api_key_id"`).
 

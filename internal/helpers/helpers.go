@@ -63,6 +63,17 @@ func GenerateSHA256() Hash {
 	return &sha256Hash{hasher: sha256.New()}
 }
 
+type sha256Factory struct{}
+
+func (sha256Factory) Hash() Hash { return GenerateSHA256() }
+
+// NewSha256Factory returns a CheckSummer that yields a fresh sha256 Hash per
+// call. Object storage expects a one-shot hash per use, so it must be given a
+// factory rather than a single Hash instance.
+func NewSha256Factory() CheckSummer {
+	return sha256Factory{}
+}
+
 type sha256Hash struct {
 	hasher hash.Hash
 }
@@ -75,11 +86,12 @@ func (h *sha256Hash) Sum() string {
 	return hex.EncodeToString(h.hasher.Sum(nil))
 }
 
-// HashName returns the hex-encoded sha256 digest of input, suitable for use
-// as a directory or filename on disk.
+// HashName returns a 16-character hex digest (first 8 bytes of sha256) of
+// input, suitable for use as a directory or filename on disk while keeping
+// paths short. 64 bits of entropy keeps collisions negligible at scale.
 func HashName(input string) string {
 	hash := sha256.Sum256([]byte(input))
-	return hex.EncodeToString(hash[:])
+	return hex.EncodeToString(hash[:8])
 }
 
 // BearerToken extracts the token value from an "Authorization: Bearer <token>"

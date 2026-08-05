@@ -40,45 +40,31 @@ var (
 	ErrApiKeyNotFound   = errors.New("api key not found")
 )
 
-const keyPrefix = "cairo_"
-
-// GeneratedKey holds the plaintext key (shown once) alongside its persisted form.
-type GeneratedKey struct {
-	Plain string
-	model.ApiKey
-}
-
-// GenerateKey returns a new "cairo_" prefixed key, its hash and its display prefix.
-func GenerateKey() (GeneratedKey, error) {
+// GenerateKey returns a new unprefixed key. The plaintext is stored as Key so
+// it can be returned by the list endpoint and used for authentication lookups.
+func GenerateKey() (model.ApiKey, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		return GeneratedKey{}, err
+		return model.ApiKey{}, err
 	}
 
-	random := hex.EncodeToString(raw)
-	plain := keyPrefix + random
-
-	return GeneratedKey{
-		Plain: plain,
-		ApiKey: model.ApiKey{
-			KeyHash: helpers.HashName(plain),
-			Prefix:  keyPrefix + random[:6],
-		},
+	return model.ApiKey{
+		Key: hex.EncodeToString(raw),
 	}, nil
 }
 
-func (as *ApiKeyService) Create(ctx context.Context, userID string) (GeneratedKey, error) {
+func (as *ApiKeyService) Create(ctx context.Context, userID string) (model.ApiKey, error) {
 	key, err := GenerateKey()
 	if err != nil {
-		return GeneratedKey{}, err
+		return model.ApiKey{}, err
 	}
 	key.UserID = userID
 	key.CreatedAt = time.Now().UTC()
 
-	id, err := as.repo.Create(ctx, key.ApiKey)
+	id, err := as.repo.Create(ctx, key)
 	if err != nil {
 		helpers.LoggerFromContext(ctx, as.logger).Error("internal_error", "err_msg", err)
-		return GeneratedKey{}, ErrApiKeyCreateFail
+		return model.ApiKey{}, ErrApiKeyCreateFail
 	}
 	key.ID = id
 
@@ -134,10 +120,10 @@ func (as *ApiKeyService) touchLastUsed(ctx context.Context, keyID string) error 
 	return nil
 }
 
-// Validate hashes the raw key and looks it up in the database, returning the
-// stored key on success. Revoked keys no longer exist and are treated as invalid.
+// Validate looks up the raw key in the database, returning the stored key on
+// success. Revoked keys no longer exist and are treated as invalid.
 func (as *ApiKeyService) Validate(ctx context.Context, rawKey string) (*model.ApiKey, error) {
-	key, err := as.repo.GetByHash(ctx, helpers.HashName(rawKey))
+	key, err := as.repo.GetByKey(ctx, rawKey)
 	if err != nil {
 		if errors.Is(err, apikey_repository.ErrApiKeyNotFound) {
 			return nil, ErrInvalidApiKey

@@ -66,7 +66,7 @@ internal/
 
 - **Object files keyed by hash, stored by `Path`.** `UploadObject` hashes `bucket.ID` → `Subdirectory` and the object key → `Filename` (`helpers.HashName`, hex sha256), writing `<root>/<ownerID>/<hash(bucketID)>/<hash(key)>`, and stores that relative path in `model.Object.Path`. Download/Delete **must not recompute hashes** — they `GetObject`/get bucket then pass `object.Path` verbatim to `disk.Read`/`disk.Delete` with the owner as the directory (no `filepath.Base`/`Dir` splitting). `Object.Path` is built once at upload via `filepath.Join(hashedBucketID, hashedKey)`.
 - **`GetObject` is not streaming.** It reads the whole object into memory, recomputes sha256, and compares against `object.Sha256sum` — mismatch → `ErrChecksumMismatch`. Private buckets require `OwnerID == bucket.OwnerID` (`ErrUnauthorized`); public buckets return without an owner.
-- **Misspelled field (by design, in use):** `Bucket.Visibilty` and `UpdateBucketInput.Visibilty` (missing second "i"; the `SetBucketVisibilityInput.Visibilty` field too). Write `Visibility` and it won't compile. Note `Object.ID` is **capital** `ID`.
+- **Visibility fields are spelled correctly:** `Bucket.Visibility`, `UpdateBucketInput.Visibility`, and `SetBucketVisibilityInput.Visibility`. Note `Object.ID` is **capital** `ID`.
 
 ## auth / apikey gotchas
 

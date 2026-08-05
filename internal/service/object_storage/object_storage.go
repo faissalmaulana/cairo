@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -190,6 +191,13 @@ func (oe *ObjectStorage) DeleteBucket(ctx context.Context, input DeleteBucketInp
 		}
 	}
 
+	// Objects no longer cascade from buckets, so their rows must be removed
+	// before the bucket row itself.
+	if err := oe.objectDB.DeleteObjectsByBucket(ctx, bucket.ID); err != nil {
+		oe.logError(ctx, err)
+		return ErrInternal
+	}
+
 	err = oe.bucketDB.DeleteBucket(ctx, input.Name, input.OwnerID)
 	if err != nil {
 		oe.logError(ctx, err)
@@ -354,7 +362,7 @@ func (oe *ObjectStorage) GetObject(ctx context.Context, input DownloadObjectInpu
 		}
 	}
 
-	objectMetadata, err := oe.objectDB.GetObject(ctx, buck.ID, buck.OwnerID, input.Name)
+	objectMetadata, err := oe.objectDB.GetObject(ctx, buck.ID, input.Name)
 	if err != nil {
 		return nil, model.Object{}, ErrObjectNotFound
 	}
@@ -384,6 +392,7 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrBucketNotFound):
+			fmt.Println("HELLOOOO 3", err)
 			return nil, model.Object{}, ErrBucketNotFound
 		default:
 			oe.logError(ctx, err)
@@ -395,8 +404,9 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 		return nil, model.Object{}, ErrUnauthorized
 	}
 
-	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, bucket.OwnerID, name)
+	objectMetadata, err := oe.objectDB.GetObject(ctx, bucket.ID, name)
 	if err != nil {
+		fmt.Println("HELLOOOO 2", err)
 		return nil, model.Object{}, ErrObjectNotFound
 	}
 
@@ -404,6 +414,7 @@ func (oe *ObjectStorage) GetPublicObject(ctx context.Context, bucketName, name s
 	if err != nil {
 		switch {
 		case errors.Is(err, disk.ErrFileNotFound), errors.Is(err, disk.ErrDirectoryNotFound):
+			fmt.Println("HELLOOOO FROM DISSKKKK", err)
 			return nil, model.Object{}, ErrObjectNotFound
 		default:
 			oe.logError(ctx, err)
@@ -450,7 +461,7 @@ func (oe *ObjectStorage) ListObjects(ctx context.Context, bucketName, ownerID st
 		}
 	}
 
-	objects, err := oe.objectDB.ListObjects(ctx, bucket.ID, ownerID)
+	objects, err := oe.objectDB.ListObjects(ctx, bucket.ID)
 	if err != nil {
 		oe.logError(ctx, err)
 		return nil, ErrInternal
@@ -475,7 +486,7 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		}
 	}
 
-	object, err := oe.objectDB.GetObject(ctx, bucket.ID, input.OwnerID, input.Name)
+	object, err := oe.objectDB.GetObject(ctx, bucket.ID, input.Name)
 	if err != nil {
 		switch {
 		case errors.Is(err, metadata.ErrObjectNotFound):
@@ -491,7 +502,7 @@ func (oe *ObjectStorage) DeleteObject(ctx context.Context, input DeleteObjectInp
 		return ErrInternal
 	}
 
-	if err := oe.objectDB.DeleteObject(ctx, bucket.ID, input.OwnerID, input.Name); err != nil {
+	if err := oe.objectDB.DeleteObject(ctx, bucket.ID, input.Name); err != nil {
 		oe.logError(ctx, err)
 		return ErrInternal
 	}

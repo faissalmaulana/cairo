@@ -91,7 +91,7 @@ func (app *Application) Mux() http.Handler {
 			apiKeys.DELETE("/:id", app.apiKeyHandler.Revoke)
 		}
 
-		accounts := v1.Group("/accounts/:account_id", app.apiKeyMiddleware.CheckApiKey)
+		accounts := v1.Group("/accounts/:account_id", app.apiKeyMiddleware.CheckApiKey, app.apiKeyMiddleware.RequireAccount)
 		{
 			accounts.GET("/buckets", app.objectStorageHandler.ListBuckets)
 			accounts.POST("/buckets", app.objectStorageHandler.CreateBucket)

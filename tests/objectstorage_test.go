@@ -111,6 +111,19 @@ func TestBucketAuthRequired(t *testing.T) {
 	failResponse(t, w, http.StatusUnauthorized, "API_KEY_REQUIRED")
 }
 
+func TestAccountMismatch(t *testing.T) {
+	t.Parallel()
+
+	router := setupEnv(t)
+	auth := setupStorageUser(t, router)
+
+	// A valid api key scoped to a different account id must be rejected before
+	// any bucket query, instead of hitting a foreign key error at the DB.
+	foreign := "some-other-user-id"
+	w := doRequest(t, router, http.MethodPost, bucketPath(foreign), auth.APIKey, handler.CreateBucketRequest{Name: "sneaky"})
+	failResponse(t, w, http.StatusForbidden, "FORBIDDEN_ACCOUNT")
+}
+
 func TestCreateAndGetBucket(t *testing.T) {
 	t.Parallel()
 

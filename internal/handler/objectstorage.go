@@ -2,12 +2,14 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/faissalmaulana/cairo/internal/helpers"
 	"github.com/faissalmaulana/cairo/internal/model"
 	objectstorage "github.com/faissalmaulana/cairo/internal/service/object_storage"
 	"github.com/gin-gonic/gin"
@@ -63,6 +65,14 @@ func objectKey(c *gin.Context) string {
 	return strings.TrimPrefix(c.Param("object_key"), "/")
 }
 
+// accountID returns the authenticated user id resolved from the api key row in
+// the database, set by ApiKeyMiddleware.CheckApiKey. The :account_id path param
+// has already been matched against it by RequireAccount; handlers always act on
+// the database-backed id rather than re-trusting the URL.
+func accountID(c *gin.Context) string {
+	return c.GetString(helpers.AuthUserIDKey)
+}
+
 func (oh *ObjectStorageHandler) handleObjectStorageError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, objectstorage.ErrOwnerIDRequired):
@@ -85,7 +95,7 @@ func (oh *ObjectStorageHandler) handleObjectStorageError(c *gin.Context, err err
 }
 
 func (oh *ObjectStorageHandler) ListBuckets(c *gin.Context) {
-	buckets, err := oh.objectStorage.ListBuckets(c.Request.Context(), c.Param("account_id"))
+	buckets, err := oh.objectStorage.ListBuckets(c.Request.Context(), accountID(c))
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
 		return
@@ -112,7 +122,7 @@ func (oh *ObjectStorageHandler) CreateBucket(c *gin.Context) {
 
 	_, err := oh.objectStorage.CreateBucket(c.Request.Context(), objectstorage.CreateBucketInput{
 		Name:    req.Name,
-		OwnerID: c.Param("account_id"),
+		OwnerID: accountID(c),
 	})
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
@@ -125,7 +135,7 @@ func (oh *ObjectStorageHandler) CreateBucket(c *gin.Context) {
 func (oh *ObjectStorageHandler) GetBucket(c *gin.Context) {
 	bucket, err := oh.objectStorage.GetBucket(c.Request.Context(), objectstorage.GetBucketInput{
 		Name:    c.Param("bucket_name"),
-		OwnerID: c.Param("account_id"),
+		OwnerID: accountID(c),
 	})
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
@@ -153,7 +163,7 @@ func (oh *ObjectStorageHandler) SetBucketVisibility(c *gin.Context) {
 
 	err := oh.objectStorage.SetBucketVisibility(c.Request.Context(), objectstorage.SetBucketVisibilityInput{
 		Name:       c.Param("bucket_name"),
-		OwnerID:    c.Param("account_id"),
+		OwnerID:    accountID(c),
 		Visibility: visibility,
 	})
 	if err != nil {
@@ -167,7 +177,7 @@ func (oh *ObjectStorageHandler) SetBucketVisibility(c *gin.Context) {
 func (oh *ObjectStorageHandler) DeleteBucket(c *gin.Context) {
 	err := oh.objectStorage.DeleteBucket(c.Request.Context(), objectstorage.DeleteBucketInput{
 		Name:    c.Param("bucket_name"),
-		OwnerID: c.Param("account_id"),
+		OwnerID: accountID(c),
 	})
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
@@ -178,7 +188,7 @@ func (oh *ObjectStorageHandler) DeleteBucket(c *gin.Context) {
 }
 
 func (oh *ObjectStorageHandler) ListObjects(c *gin.Context) {
-	objects, err := oh.objectStorage.ListObjects(c.Request.Context(), c.Param("bucket_name"), c.Param("account_id"))
+	objects, err := oh.objectStorage.ListObjects(c.Request.Context(), c.Param("bucket_name"), accountID(c))
 	if err != nil {
 		oh.handleObjectStorageError(c, err)
 		return
@@ -208,7 +218,7 @@ func (oh *ObjectStorageHandler) UploadObject(c *gin.Context) {
 
 	_, err = oh.objectStorage.UploadObject(c.Request.Context(), objectstorage.UploadObjectInput{
 		BucketName: c.Param("bucket_name"),
-		OwnerID:    c.Param("account_id"),
+		OwnerID:    accountID(c),
 		Name:       objectKey(c),
 		Content:    src,
 	})
@@ -223,7 +233,7 @@ func (oh *ObjectStorageHandler) UploadObject(c *gin.Context) {
 func (oh *ObjectStorageHandler) GetObject(c *gin.Context) {
 	rc, object, err := oh.objectStorage.GetObject(c.Request.Context(), objectstorage.DownloadObjectInput{
 		BucketName: c.Param("bucket_name"),
-		OwnerID:    c.Param("account_id"),
+		OwnerID:    accountID(c),
 		Name:       objectKey(c),
 	})
 	if err != nil {
@@ -239,6 +249,7 @@ func (oh *ObjectStorageHandler) GetObject(c *gin.Context) {
 func (oh *ObjectStorageHandler) GetPublicObject(c *gin.Context) {
 	rc, object, err := oh.objectStorage.GetPublicObject(c.Request.Context(), c.Param("bucket_name"), objectKey(c))
 	if err != nil {
+		fmt.Println("HELLOOOO 4", err)
 		oh.handleObjectStorageError(c, err)
 		return
 	}
@@ -266,7 +277,7 @@ func (oh *ObjectStorageHandler) streamObject(c *gin.Context, rc io.ReadCloser, o
 func (oh *ObjectStorageHandler) DeleteObject(c *gin.Context) {
 	err := oh.objectStorage.DeleteObject(c.Request.Context(), objectstorage.DeleteObjectInput{
 		BucketName: c.Param("bucket_name"),
-		OwnerID:    c.Param("account_id"),
+		OwnerID:    accountID(c),
 		Name:       objectKey(c),
 	})
 	if err != nil {

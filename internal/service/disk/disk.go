@@ -163,11 +163,20 @@ func (d *Disk) Link(source, name string) error {
 		return err
 	}
 
+	// The link target must be stored relative to the public directory where
+	// the symlink lives. Storing src verbatim would resolve relative
+	// entrypoints against public/ (e.g. <entrypoint>/public/storage/...) and
+	// break every read through the link.
+	rel, err := filepath.Rel(filepath.Dir(target), src)
+	if err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
 
-	return os.Symlink(src, target)
+	return os.Symlink(rel, target)
 }
 
 // Unlink removes the symlink at <entrypoint>/public/<name>, taking the named

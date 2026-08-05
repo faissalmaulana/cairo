@@ -29,12 +29,6 @@ func (or *SQLiteObjectRepository) WithTx(tx *sql.Tx) *SQLiteObjectRepository {
 	}
 }
 
-const objectColumns = `o.id,o.bucket_id,o.key,o.path,o.size,o.sha256sum,o.content_type`
-
-// objectScopeQuery joins objects to their bucket so lookups can be restricted
-// to buckets owned by ownerID.
-const objectScopeQuery = `SELECT ` + objectColumns + ` FROM objects o JOIN buckets b ON b.id=o.bucket_id WHERE o.bucket_id=? AND b.owner_id=?`
-
 func scanObject(row *sql.Row) (model.Object, error) {
 	var obj model.Object
 
@@ -80,13 +74,13 @@ func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model
 	return id, nil
 }
 
-func (or *SQLiteObjectRepository) GetObject(ctx context.Context, bucketID, ownerID, name string) (model.Object, error) {
-	query := objectScopeQuery + ` AND o.key=?`
+func (or *SQLiteObjectRepository) GetObject(ctx context.Context, bucketID, name string) (model.Object, error) {
+	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type FROM objects WHERE bucket_id=? AND key=?`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
-	object, err := scanObject(or.db.QueryRowContext(queryctx, query, bucketID, ownerID, name))
+	object, err := scanObject(or.db.QueryRowContext(queryctx, query, bucketID, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Object{}, ErrObjectNotFound
 	}
@@ -97,13 +91,13 @@ func (or *SQLiteObjectRepository) GetObject(ctx context.Context, bucketID, owner
 	return object, nil
 }
 
-func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID, ownerID string) ([]model.Object, error) {
-	query := objectScopeQuery + ` ORDER BY o.key`
+func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID string) ([]model.Object, error) {
+	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type FROM objects WHERE bucket_id=? ORDER BY key`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
-	rows, err := or.db.QueryContext(queryctx, query, bucketID, ownerID)
+	rows, err := or.db.QueryContext(queryctx, query, bucketID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,13 +125,13 @@ func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID, own
 	return objects, rows.Err()
 }
 
-func (or *SQLiteObjectRepository) DeleteObject(ctx context.Context, bucketID, ownerID, name string) error {
-	query := `DELETE FROM objects WHERE bucket_id=? AND key=? AND bucket_id IN (SELECT id FROM buckets WHERE id=? AND owner_id=?)`
+func (or *SQLiteObjectRepository) DeleteObject(ctx context.Context, bucketID, name string) error {
+	query := `DELETE FROM objects WHERE bucket_id=? AND key=?`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
-	result, err := or.db.ExecContext(queryctx, query, bucketID, name, bucketID, ownerID)
+	result, err := or.db.ExecContext(queryctx, query, bucketID, name)
 	if err != nil {
 		return err
 	}
@@ -151,4 +145,14 @@ func (or *SQLiteObjectRepository) DeleteObject(ctx context.Context, bucketID, ow
 	}
 
 	return nil
+}
+
+func (or *SQLiteObjectRepository) DeleteObjectsByBucket(ctx context.Context, bucketID string) error {
+	query := `DELETE FROM objects WHERE bucket_id=?`
+
+	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
+	defer cancel()
+
+	_, err := or.db.ExecContext(queryctx, query, bucketID)
+	return err
 }

@@ -332,6 +332,31 @@ func TestLink(t *testing.T) {
 		assert.EqualError(t, err, "link target already exists")
 	})
 
+	t.Run("resolves when the entrypoint is a relative path", func(t *testing.T) {
+
+		cwd, err := os.Getwd()
+		require.NoError(t, err)
+
+		entryAbs := t.TempDir()
+		entryRel, err := filepath.Rel(cwd, entryAbs)
+		require.NoError(t, err)
+		require.False(t, filepath.IsAbs(entryRel), "entrypoint must stay relative for this test")
+
+		dir := filepath.Join(entryAbs, "user-123", "abc123")
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0o644))
+
+		d := disk.NewDisk(entryRel)
+		require.NoError(t, d.Link(filepath.Join("user-123", "abc123"), "abc123"))
+
+		// Reading through the public link must resolve to the real content even
+		// though the entrypoint is relative: the stored target is relative to
+		// the public directory, not to the process working directory.
+		got, err := os.ReadFile(filepath.Join(entryRel, "public", "abc123", "a.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, "data", string(got))
+	})
+
 	t.Run("fails when source directory is empty", func(t *testing.T) {
 
 		d := disk.NewDisk(t.TempDir())

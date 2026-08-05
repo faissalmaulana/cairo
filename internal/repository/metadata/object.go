@@ -9,9 +9,13 @@ import (
 
 type ObjectMetadataRepository interface {
 	CreateObject(ctx context.Context, object model.Object) (string, error)
-	GetObject(ctx context.Context, bucketID, ownerID, name string) (model.Object, error)
-	ListObjects(ctx context.Context, bucketID, ownerID string) ([]model.Object, error)
-	DeleteObject(ctx context.Context, bucketID, ownerID, name string) error
+	GetObject(ctx context.Context, bucketID, name string) (model.Object, error)
+	ListObjects(ctx context.Context, bucketID string) ([]model.Object, error)
+	DeleteObject(ctx context.Context, bucketID, name string) error
+	// DeleteObjectsByBucket removes every object row of a bucket. Buckets do
+	// not cascade to objects anymore, so the service must call this before
+	// deleting a bucket.
+	DeleteObjectsByBucket(ctx context.Context, bucketID string) error
 }
 
 var (

@@ -86,7 +86,7 @@ func main() {
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeySvc)
 	apiKeyMiddleware := middleware.NewApiKeyMiddleware(apiKeySvc)
 
-	storageRoot := helpers.GetEnv("STORAGE_ROOT", "storage")
+	storageRoot := helpers.GetEnv("STORAGE_PATH", "storage")
 	if err := os.MkdirAll(storageRoot, 0o755); err != nil {
 		log.Fatal(err)
 	}

@@ -24,7 +24,6 @@ func NewApiKeyHandler(apiKeyService *apikey_service.ApiKeyService) *ApiKeyHandle
 type CreateApiKeyResponse struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`
-	Prefix    string `json:"prefix"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -43,15 +42,14 @@ func (ah *ApiKeyHandler) Create(c *gin.Context) {
 
 	OK(c, http.StatusCreated, CreateApiKeyResponse{
 		ID:        key.ID,
-		Key:       key.Plain,
-		Prefix:    key.Prefix,
+		Key:       key.Key,
 		CreatedAt: key.CreatedAt.Format(time.RFC3339),
 	})
 }
 
 type ApiKeyResponse struct {
 	ID        string `json:"id"`
-	Prefix    string `json:"prefix"`
+	Key       string `json:"key"`
 	LastUsed  string `json:"last_used,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
@@ -59,7 +57,7 @@ type ApiKeyResponse struct {
 func toApiKeyResponse(key model.ApiKey) ApiKeyResponse {
 	resp := ApiKeyResponse{
 		ID:        key.ID,
-		Prefix:    key.Prefix,
+		Key:       key.Key,
 		CreatedAt: key.CreatedAt.Format(time.RFC3339),
 	}
 	if lu := key.LastUsedAt; lu != nil {

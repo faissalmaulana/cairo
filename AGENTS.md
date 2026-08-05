@@ -71,7 +71,7 @@ internal/
 ## auth / apikey gotchas
 
 - JWT (HS256) `Claims` carry a `Type` (`access`/`refresh`) and a `jti`; access and refresh are validated against expected type. Refresh tokens are **single-use**: stored in Redis `refresh:<jti>` and consumed via `GetDel` (rotation) — a replayed old refresh token fails with `ErrRefreshRevoked`. Logout denylists the access `jti` until it expires.
-- API keys are stored as `KeyHash` + a `Prefix`; the middleware looks the key up by prefix/hash, never stores/compares raw keys.
+- API keys are stored as raw `key` (unique), no prefix and no hash; the middleware (`CheckApiKey`) looks the key up by exact match via `service.Validate` → `repo.GetByKey`. Revoking deletes the row. Signup auto-creates the first key and returns it in the `api_key` field; `GET /account/apikeys` returns the full keys.
 - All handlers respond via the shared envelope `handler.OK`/`handler.Fail`: `{"success": bool, "data"?: any, "error"?: {code, message}}`. Error **codes are string constants** in `internal/handler/errors.go` (e.g. `BAD_REQUEST`, `EMAIL_EXISTS`, `TOKEN_REQUIRED`, `INVALID_API_KEY`) — e2e tests assert on these, so don't rename them casually.
 - Gin context keys for authenticated identity: `helpers.AuthUserIDKey` (`"auth_user_id"`) and `helpers.ApiKeyIDKey` (`"api_key_id"`).
 

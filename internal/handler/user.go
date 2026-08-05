@@ -69,7 +69,7 @@ func (ur *UserHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	tokens.APIKey = key.Plain
+	tokens.APIKey = key.Key
 
 	OK(c, http.StatusCreated, tokens)
 }

@@ -14,7 +14,7 @@ import (
 
 type ApiKeyRepository interface {
 	Create(ctx context.Context, newKey model.ApiKey) (string, error)
-	GetByHash(ctx context.Context, keyHash string) (*model.ApiKey, error)
+	GetByKey(ctx context.Context, key string) (*model.ApiKey, error)
 	ListByUser(ctx context.Context, userID string) ([]model.ApiKey, error)
 	Revoke(ctx context.Context, id, userID string) error
 	TouchLastUsed(ctx context.Context, id string) error
@@ -44,7 +44,7 @@ var (
 
 func (ud *SQLiteApiKeyRepository) Create(ctx context.Context, newKey model.ApiKey) (string, error) {
 	id := uuid.NewString()
-	query := `INSERT INTO api_keys(id,user_id,key_hash,prefix,createdAt) VALUES(?,?,?,?,?)`
+	query := `INSERT INTO api_keys(id,user_id,key,createdAt) VALUES(?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -61,29 +61,27 @@ func (ud *SQLiteApiKeyRepository) Create(ctx context.Context, newKey model.ApiKe
 		query,
 		id,
 		newKey.UserID,
-		newKey.KeyHash,
-		newKey.Prefix,
+		newKey.Key,
 		createdAt,
 	)
 
 	return id, err
 }
 
-func (ud *SQLiteApiKeyRepository) GetByHash(ctx context.Context, keyHash string) (*model.ApiKey, error) {
-	query := `SELECT id,user_id,key_hash,prefix,last_used_at,createdAt FROM api_keys WHERE key_hash=?`
+func (ud *SQLiteApiKeyRepository) GetByKey(ctx context.Context, key string) (*model.ApiKey, error) {
+	query := `SELECT id,user_id,key,last_used_at,createdAt FROM api_keys WHERE key=?`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
 
-	var key model.ApiKey
+	var keyRow model.ApiKey
 	var lastUsedAt sql.NullInt64
 	var createdAt int64
 
-	err := ud.db.QueryRowContext(queryctx, query, keyHash).Scan(
-		&key.ID,
-		&key.UserID,
-		&key.KeyHash,
-		&key.Prefix,
+	err := ud.db.QueryRowContext(queryctx, query, key).Scan(
+		&keyRow.ID,
+		&keyRow.UserID,
+		&keyRow.Key,
 		&lastUsedAt,
 		&createdAt,
 	)
@@ -96,15 +94,15 @@ func (ud *SQLiteApiKeyRepository) GetByHash(ctx context.Context, keyHash string)
 
 	if lastUsedAt.Valid {
 		t := time.Unix(lastUsedAt.Int64, 0)
-		key.LastUsedAt = &t
+		keyRow.LastUsedAt = &t
 	}
-	key.CreatedAt = time.Unix(createdAt, 0)
+	keyRow.CreatedAt = time.Unix(createdAt, 0)
 
-	return &key, nil
+	return &keyRow, nil
 }
 
 func (ud *SQLiteApiKeyRepository) ListByUser(ctx context.Context, userID string) ([]model.ApiKey, error) {
-	query := `SELECT id,user_id,key_hash,prefix,last_used_at,createdAt FROM api_keys WHERE user_id=? ORDER BY createdAt DESC`
+	query := `SELECT id,user_id,key,last_used_at,createdAt FROM api_keys WHERE user_id=? ORDER BY createdAt DESC`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -124,8 +122,7 @@ func (ud *SQLiteApiKeyRepository) ListByUser(ctx context.Context, userID string)
 		if err := rows.Scan(
 			&key.ID,
 			&key.UserID,
-			&key.KeyHash,
-			&key.Prefix,
+			&key.Key,
 			&lastUsedAt,
 			&createdAt,
 		); err != nil {

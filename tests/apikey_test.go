@@ -43,8 +43,6 @@ func TestCreateApiKey(t *testing.T) {
 
 	require.NotEmpty(t, key.ID)
 	require.NotEmpty(t, key.Key)
-	require.Contains(t, key.Key, "cairo_")
-	require.NotEmpty(t, key.Prefix)
 	require.NotEmpty(t, key.CreatedAt)
 }
 
@@ -67,7 +65,7 @@ func TestListApiKeys(t *testing.T) {
 			continue
 		}
 		found = true
-		require.Equal(t, created.Prefix, k.Prefix)
+		require.Equal(t, created.Key, k.Key)
 	}
 	require.True(t, found, "created api key should appear in the list")
 }

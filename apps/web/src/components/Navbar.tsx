@@ -15,9 +15,9 @@ export default function Navbar() {
     };
 
     return (
-        <header className="border-b border-neutral-200 bg-white">
+        <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/80 backdrop-blur">
             <div className="mx-auto flex max-w-full items-center justify-between px-4 py-4">
-                <Link to="/" className="text-lg font-semibold text-neutral-900">
+                <Link to="/" className="text-lg font-semibold text-sky-600">
                     cairo
                 </Link>
                 <div className="flex items-center gap-3">

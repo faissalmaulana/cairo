@@ -68,7 +68,7 @@ export default function UploadObjectPage() {
       <div className="w-full max-w-xl space-y-4">
         <Link
           to={`/buckets/${bucketName}`}
-          className="block text-sm text-blue-600 hover:underline"
+          className="block text-sm text-sky-600 hover:underline"
         >
           &larr; Back to {bucketName}
         </Link>
@@ -98,7 +98,7 @@ export default function UploadObjectPage() {
               value={directory}
               onChange={(e) => setDirectory(e.target.value)}
               placeholder="e.g. images/avatars"
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
             />
           </label>
 
@@ -112,8 +112,8 @@ export default function UploadObjectPage() {
             onDrop={handleDrop}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors ${
               dragOver
-                ? "border-blue-400 bg-blue-50"
-                : "border-neutral-300 hover:border-blue-400"
+                ? "border-sky-400 bg-sky-50"
+                : "border-neutral-300 hover:border-sky-400"
             }`}
           >
             <Upload className="h-8 w-8 text-neutral-400" />
@@ -143,7 +143,7 @@ export default function UploadObjectPage() {
           <button
             type="submit"
             disabled={!file}
-            className="w-full rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Upload
           </button>
@@ -168,7 +168,7 @@ export default function UploadObjectPage() {
                   </p>
                 </div>
                 {upload.status === "uploading" && (
-                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-500" />
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-sky-500" />
                 )}
                 {upload.status === "success" && (
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
@@ -180,7 +180,7 @@ export default function UploadObjectPage() {
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    upload.status === "error" ? "bg-red-400" : "bg-blue-500"
+                    upload.status === "error" ? "bg-red-400" : "bg-sky-500"
                   }`}
                   style={{ width: `${upload.progress}%` }}
                 />

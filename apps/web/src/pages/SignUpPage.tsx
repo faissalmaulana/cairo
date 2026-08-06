@@ -48,7 +48,7 @@ export default function SignUpPage() {
                                     required
                                     value={field.state.value}
                                     onChange={(e) => field.handleChange(e.target.value)}
-                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
                                     placeholder="lizzy"
                                 />
                             </label>
@@ -67,7 +67,7 @@ export default function SignUpPage() {
                                     required
                                     value={field.state.value}
                                     onChange={(e) => field.handleChange(e.target.value)}
-                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
                                     placeholder="you@example.com"
                                 />
                             </label>
@@ -88,7 +88,7 @@ export default function SignUpPage() {
                                     required
                                     value={field.state.value}
                                     onChange={(e) => field.handleChange(e.target.value)}
-                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
                                     placeholder="••••••••"
                                 />
                             </label>
@@ -103,14 +103,14 @@ export default function SignUpPage() {
                 <button
                     type="submit"
                     disabled={isSigningUp}
-                    className="mt-6 w-full rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-6 w-full rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     {isSigningUp ? 'Creating account...' : 'Sign up'}
                 </button>
 
                 <p className="mt-4 text-center text-sm text-neutral-500">
                     Already have an account?{' '}
-                    <Link className="font-medium text-blue-600 hover:underline" to="/signin">
+                    <Link className="font-medium text-sky-600 hover:underline" to="/signin">
                         Sign in
                     </Link>
                 </p>

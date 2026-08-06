@@ -96,7 +96,7 @@ export default function BucketDetailPage() {
 
   return (
     <main className="mx-auto max-w-full px-4 py-10">
-      <Link to="/" className="text-sm text-blue-600 hover:underline">
+      <Link to="/" className="text-sm text-sky-600 hover:underline">
         &larr; Back to buckets
       </Link>
 
@@ -110,7 +110,7 @@ export default function BucketDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? "bg-blue-500 text-white"
+                    ? "bg-sky-500 text-white"
                     : "text-neutral-700 hover:bg-neutral-200"
                 }`}
               >

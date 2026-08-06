@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiKeysApi } from "../../api/apikeys.ts";
 import type { ApiKey } from "../../api/apikeys.ts";
+import { formatDateTime } from "../../lib/format.ts";
 
 const QUERY_KEY = ["api-keys"] as const;
 
@@ -69,7 +70,7 @@ export default function ApiKeysSection() {
           type="button"
           onClick={() => createMutation.mutate()}
           disabled={createMutation.isPending}
-          className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {createMutation.isPending ? "Creating..." : "Create key"}
         </button>
@@ -130,9 +131,9 @@ export default function ApiKeysSection() {
                   </button>
                 </div>
                 <p className="mt-1.5 text-xs text-neutral-500">
-                  Created {new Date(key.created_at).toLocaleString()}
+                  Created {formatDateTime(key.created_at)}
                   {key.last_used
-                    ? ` · Last used ${new Date(key.last_used).toLocaleString()}`
+                    ? ` · Last used ${formatDateTime(key.last_used)}`
                     : ""}
                 </p>
               </li>

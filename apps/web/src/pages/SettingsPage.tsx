@@ -33,7 +33,7 @@ export default function SettingsPage() {
                                 onClick={() => setActive(section.id)}
                                 className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
                                     active === section.id
-                                        ? 'bg-blue-500 text-white'
+                                        ? 'bg-sky-500 text-white'
                                         : 'text-neutral-700 hover:bg-neutral-200'
                                 }`}
                             >

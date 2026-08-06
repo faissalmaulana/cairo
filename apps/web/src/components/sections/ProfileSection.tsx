@@ -17,7 +17,7 @@ export default function ProfileSection({
             </div>
 
             <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500 text-xl font-semibold text-white">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-500 text-xl font-semibold text-white">
                     {initial}
                 </div>
                 <div>

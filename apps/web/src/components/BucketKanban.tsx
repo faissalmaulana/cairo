@@ -8,6 +8,7 @@ import { useAuth } from "../auth/useAuth.ts";
 import { bucketsApi } from "../api/buckets.ts";
 import type { Bucket } from "../api/buckets.ts";
 import { apiKeysApi } from "../api/apikeys.ts";
+import { formatDateTime } from "../lib/format.ts";
 
 const BUCKET_NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
@@ -124,7 +125,7 @@ export default function BucketKanban() {
                             placeholder="bucket-name"
                             value={field.state.value}
                             onChange={(e) => field.handleChange(e.target.value)}
-                            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                            className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-sky-500"
                           />
                           {field.state.meta.errors.length > 0 && (
                             <p className="mt-1 text-xs text-red-600">
@@ -138,7 +139,7 @@ export default function BucketKanban() {
                       <button
                         type="submit"
                         disabled={createBucketMutation.isPending}
-                        className="flex-1 rounded-lg bg-blue-500 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex-1 rounded-lg bg-sky-500 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {createBucketMutation.isPending
                           ? "Creating..."
@@ -169,7 +170,7 @@ export default function BucketKanban() {
                     onClick={() => setCreating(true)}
                     title="Create bucket"
                     aria-label="Create bucket"
-                    className="flex h-44 w-72 shrink-0 items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-white text-neutral-500 transition-colors hover:border-blue-400 hover:text-blue-500"
+                    className="flex h-44 w-72 shrink-0 items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-white text-neutral-500 transition-colors hover:border-sky-400 hover:text-sky-500"
                   >
                     <Plus className="h-7 w-7" />
                   </button>
@@ -191,10 +192,10 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
       type="button"
       onClick={() => navigate(`/buckets/${bucket.name}`)}
       title={`Open ${bucket.name}`}
-      className="group flex h-44 w-72 shrink-0 flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 text-left shadow-sm transition-all hover:border-blue-400 hover:shadow-md"
+      className="group flex h-44 w-72 shrink-0 flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 text-left shadow-sm transition-all hover:border-sky-400 hover:shadow-md"
     >
       <span className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-500">
           <Box className="h-5 w-5" />
         </span>
         <span className="min-w-0">
@@ -202,7 +203,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
             {bucket.name}
           </span>
           <span className="mt-1 block text-xs text-neutral-500">
-            Created {new Date(bucket.created_at).toLocaleDateString()}
+            Created {formatDateTime(bucket.created_at)}
           </span>
         </span>
       </span>
@@ -216,7 +217,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
         >
           {bucket.visibility}
         </span>
-        <ArrowUpRight className="h-4 w-4 text-neutral-400 transition-colors group-hover:text-blue-500" />
+        <ArrowUpRight className="h-4 w-4 text-neutral-400 transition-colors group-hover:text-sky-500" />
       </span>
     </button>
   );

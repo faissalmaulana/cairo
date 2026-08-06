@@ -9,7 +9,7 @@ export default function Avatar() {
         <Link
             to="/settings"
             title={`Settings for ${user?.username ?? ''}`}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-500 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500 text-sm font-semibold text-white transition-colors hover:bg-sky-600"
         >
             {initial}
         </Link>

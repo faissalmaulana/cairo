@@ -46,7 +46,7 @@ export default function SignInPage() {
                                     required
                                     value={field.state.value}
                                     onChange={(e) => field.handleChange(e.target.value)}
-                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
                                     placeholder="you@example.com"
                                 />
                             </label>
@@ -65,7 +65,7 @@ export default function SignInPage() {
                                     required
                                     value={field.state.value}
                                     onChange={(e) => field.handleChange(e.target.value)}
-                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-sky-500"
                                     placeholder="••••••••"
                                 />
                             </label>
@@ -80,14 +80,14 @@ export default function SignInPage() {
                 <button
                     type="submit"
                     disabled={isSigningIn}
-                    className="mt-6 w-full rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-6 w-full rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     {isSigningIn ? 'Signing in...' : 'Sign in'}
                 </button>
 
                 <p className="mt-4 text-center text-sm text-neutral-500">
                     No account yet?{' '}
-                    <Link className="font-medium text-blue-600 hover:underline" to="/signup">
+                    <Link className="font-medium text-sky-600 hover:underline" to="/signup">
                         Sign up
                     </Link>
                 </p>

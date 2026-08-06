@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { bucketsApi } from "../../api/buckets.ts";
 import type { ObjectMetadata } from "../../api/buckets.ts";
+import { formatDateTime } from "../../lib/format.ts";
 
 interface FileNode {
   type: "file";
@@ -185,7 +186,7 @@ export default function BucketFilesTab({
           </div>
           <Link
             to={`/buckets/${bucketName}/upload`}
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600"
           >
             <Upload className="h-4 w-4" />
             Upload
@@ -201,7 +202,7 @@ export default function BucketFilesTab({
             placeholder="Search objects..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-sky-500"
           />
         </div>
       </div>
@@ -307,7 +308,7 @@ export default function BucketFilesTab({
                 <a
                   href={previewUrl}
                   download={preview.name}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+                  className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-600"
                 >
                   <Download className="h-4 w-4" />
                   Download
@@ -355,9 +356,9 @@ function TreeRows({
               >
                 <span className="flex items-center gap-1">
                   {expanded.has(node.path) ? (
-                    <FolderOpen className="h-4 w-4 text-blue-500" />
+                    <FolderOpen className="h-4 w-4 text-sky-500" />
                   ) : (
-                    <Folder className="h-4 w-4 text-blue-500" />
+                    <Folder className="h-4 w-4 text-sky-500" />
                   )}
                   {node.name}
                 </span>
@@ -398,7 +399,7 @@ function TreeRows({
               {formatBytes(node.meta.size)}
             </td>
             <td className="px-3 py-2 text-neutral-400">
-              {new Date(node.meta.created_at).toLocaleDateString()}
+              {formatDateTime(node.meta.created_at)}
             </td>
             <td className="px-3 py-2">
               <button

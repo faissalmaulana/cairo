@@ -1,0 +1,15 @@
+info:
+  name: revoke-api-key
+  type: http
+  seq: 1
+
+http:
+  method: DELETE
+  url: "{{base_url}}/{{prefix_api_v1}}/account/apikeys/c47af781-dd2b-4a9b-8cdb-db3ef3fcfcc3"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

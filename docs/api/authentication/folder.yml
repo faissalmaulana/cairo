@@ -1,0 +1,12 @@
+info:
+  name: authentication
+  type: folder
+  seq: 6
+
+request:
+  auth:
+    type: bearer
+    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoiYWNjZXNzIiwiaXNzIjoiY2Fpcm8iLCJzdWIiOiIwOWQ5NTEzZS01ZGFlLTRmYjUtYTcxOS0xZGMyNTdhZjBjM2IiLCJhdWQiOlsiY2Fpcm8tYXBpIl0sImV4cCI6MTc4NTk0NjIyNywiaWF0IjoxNzg1OTQ1NjI3LCJqdGkiOiIxMTQ3OTljYy0yNjVhLTRlOGUtYTBiNi03NzI2ZDRlYjNiNWMifQ.waAWu7tfr6S9SuzFWy8HxirdBfblDTitOoEWwk9flcQ
+  variables:
+    - name: refresh_token
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoicmVmcmVzaCIsImlzcyI6ImNhaXJvIiwic3ViIjoiMDEyMTVjMmEtNGM2NS00MWZjLTk4OGMtNmVhOWZmYjA5NzgyIiwiYXVkIjpbImNhaXJvLWFwaSJdLCJleHAiOjE3ODY1NDY5MzEsImlhdCI6MTc4NTk0MjEzMSwianRpIjoiNGRmYzQwOGYtMTY4Mi00NzIwLWJlNDUtZWUyOTFkNDhhNTM0In0.3p6WhJDEpXkrpGmaYKLQE1MkQ-4UAVcxda8BCIylZ0M

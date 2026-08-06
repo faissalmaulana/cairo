@@ -1,0 +1,17 @@
+info:
+  name: get-public-object
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{base_url}}/{{prefix_api_v1}}/public/buckets/project1/objects/scripts/nordi.jpeg"
+  auth:
+    type: bearer
+    token: cairo_2a1ee924f6106f7b19887125287132ee7ddc3922290132d605469ff10ab57c77
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

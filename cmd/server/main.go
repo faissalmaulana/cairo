@@ -116,6 +116,7 @@ func main() {
 		helpers.GetEnv("SERVER_MODE", "development"),
 		&handler.DependenciesHealth{DB: db, Redis: rdb},
 		helpers.GetEnv("HEALTH_ADDR", "localhost:8081"),
+		helpers.GetEnv("DOCS_PATH", "./assets/documentation.html"),
 		logger,
 	)
 	app.Run()

@@ -1,0 +1,25 @@
+info:
+  name: create-bucket
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{base_url}}/{{prefix_api_v1}}/accounts/:account_id/buckets"
+  params:
+    - name: account_id
+      value: "{{account_id}}"
+      type: path
+  body:
+    type: json
+    data: |-
+      {
+        "name":"project1"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

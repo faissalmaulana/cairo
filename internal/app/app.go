@@ -31,6 +31,7 @@ type Application struct {
 	mode                 string
 	health               handler.HealthChecker
 	healthAddr           string
+	docsPath             string
 	logger               *slog.Logger
 }
 
@@ -45,6 +46,7 @@ func New(
 	mode string,
 	health handler.HealthChecker,
 	healthAddr string,
+	docsPath string,
 	logger *slog.Logger,
 ) *Application {
 
@@ -62,6 +64,7 @@ func New(
 		mode:                 mode,
 		health:               health,
 		healthAddr:           healthAddr,
+		docsPath:             docsPath,
 		logger:               logger,
 	}
 }
@@ -114,6 +117,9 @@ func (app *Application) Mux() http.Handler {
 		}
 
 	}
+
+	// Public API docs page: a single static file.
+	router.StaticFile("/api/v1/docs", app.docsPath)
 
 	return router
 }

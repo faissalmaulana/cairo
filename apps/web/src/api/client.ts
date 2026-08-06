@@ -2,7 +2,7 @@ import { tokenStore } from './tokens.ts';
 import type { TokenPair } from './tokens.ts';
 
 export const API_BASE: string =
-    import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/api/v1';
+    import.meta.env.VITE_API_BASE;
 
 export interface TokenResponse {
     access_token: string;

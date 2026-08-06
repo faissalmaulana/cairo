@@ -28,7 +28,12 @@ export default function SignInPage() {
                     form.handleSubmit();
                 }}
             >
-                <h1 className="text-2xl font-semibold text-neutral-900">Sign in</h1>
+                <img
+                    src="/logo/cairo-logo.png"
+                    alt="cairo"
+                    className="mx-auto h-10 w-auto"
+                />
+                <h1 className="mt-6 text-2xl font-semibold text-neutral-900">Sign in</h1>
                 <p className="mt-1 text-sm text-neutral-500">
                     Welcome back, access your buckets and objects.
                 </p>

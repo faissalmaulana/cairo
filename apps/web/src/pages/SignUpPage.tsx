@@ -28,7 +28,12 @@ export default function SignUpPage() {
                     form.handleSubmit();
                 }}
             >
-                <h1 className="text-2xl font-semibold text-neutral-900">Create account</h1>
+                <img
+                    src="/logo/cairo-logo.png"
+                    alt="cairo"
+                    className="mx-auto h-10 w-auto"
+                />
+                <h1 className="mt-6 text-2xl font-semibold text-neutral-900">Create account</h1>
                 <p className="mt-1 text-sm text-neutral-500">
                     Sign up to start storing objects.
                 </p>

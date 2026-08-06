@@ -32,11 +32,13 @@ go test -run TestSetBucketVisibility ./internal/service/object_storage/
 ## Architecture
 
 ```
-cmd/server/main.go        — wiring: config → repos → services → handlers/middleware → app.Run()
+cmd/server/main.go        — wiring: config → repos → services → handler/middleware → app.Run()
 internal/
 ├── app/                  — Application: builds routes, runs API + health servers, graceful shutdown
 ├── config/               — OpenDB (sqlite) + NewRedis
-├── handlers/             — user, apikey, objectstorage, health; shared Response/Error envelope + errors.go code constants
+├── handler/              — user, apikey, objectstorage, health; shared Response/Error envelope + errors.go code constants
+├── helpers/              — env access, ValidateBucketName, HashName
+├── variables/            — shared app constants/state
 ├── middleware/           — auth (JWT) + apikey
 ├── migrations/           — goose migrations (embedded SQL)
 ├── model/                — user.go, apikey.go, metadata.go (bucket/object)

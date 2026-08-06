@@ -16,13 +16,14 @@ go test -run TestSetBucketVisibility ./internal/service/object_storage/
 # WARNING: `go test ./...` ALSO runs ./tests (package e2e) — see below.
 ```
 
-**`go test ./...` needs Docker. (agents asume the user already run docker, so do not install/run docker manually)** The `tests/` package (`tests/e2e_test.go`, package `e2e`) boots **Redis via testcontainers** (pulls `redis:alpine`) against a fresh goose-migrated SQLite DB. There is **no build tag to skip them** — they run on any `go test ./...` and fail without a running Docker daemon. **Again, Agents asume the user already run docker, so do not install/run docker manually**, The `internal/...` unit tests do not need Docker or Redis.
+**`go test ./...` also runs `./tests` (package `e2e`) and needs a running Docker daemon — `tests/` boots **Redis via testcontainers** (pulls `redis:alpine`) against a fresh goose-migrated SQLite DB. Assume the user already runs Docker; never install/start it yourself. There is **no build tag to skip them**, and they fail without Docker. The `internal/...` unit tests need neither Docker nor Redis.
 
 ## Runtime / stack
 
 - **Two listeners.** Main Gin API on `SERVER_ADDR` (default `localhost:8080`), separate health server on `HEALTH_ADDR` (default `localhost:8081`). All route wiring + timeout/mode config lives in `internal/app/app.go`; `cmd/server/main.go` does the wiring.
 - **Config from env.** `godotenv` loads `.env` (gitignored); every value read via `helpers.GetEnv*` with a default, so the server still boots with empty/missing config (e.g. empty DSN). `internal/config` has `OpenDB` + `NewRedis`.
 - **SQLite (pure Go, no cgo)** via `modernc.org/sqlite`; `OpenDB` appends `?_pragma=foreign_keys(1)` to the DSN. Schema migrations use goose with **embedded** `.sql` files in `internal/migrations/` (must add new migrations there); run programmatically with `migrations.Up(db)` — see `tests/e2e_test.go`.
+- **Storage root** from env `STORAGE_PATH` (default `"storage"`, created with `os.MkdirAll` at boot in `cmd/server/main.go`, passed verbatim to `disk.NewDisk`).
 - **Redis required for tokens** (refresh-token store + access-token denylist). No Redis client → token service returns `ErrNoRedis`.
 - `database/`, `scripts/`, `.opencode/` are **gitignored and local-only** — not part of source. `scripts/*.sh` are curl helpers for manual API testing against a running server.
 
@@ -33,7 +34,7 @@ cmd/server/main.go        — wiring: config → repos → services → handlers
 internal/
 ├── app/                  — Application: builds routes, runs API + health servers, graceful shutdown
 ├── config/               — OpenDB (sqlite) + NewRedis
-├── handlers/             — user, apikey, health; shared Response/Error envelope + errors.go code constants
+├── handlers/             — user, apikey, objectstorage, health; shared Response/Error envelope + errors.go code constants
 ├── middleware/           — auth (JWT) + apikey
 ├── migrations/           — goose migrations (embedded SQL)
 ├── model/                — user.go, apikey.go, metadata.go (bucket/object)
@@ -52,7 +53,7 @@ internal/
 ```
 
 - Service/repo packages use suffix naming (often aliased in imports): `user_service`, `auth_service`, `token_service`, `apikey_service`, `apikey_repository`.
-- Tests: `internal/service/disk` black-box (`package disk_test`); `object_storage`, `apikey`, `auth` white-box (same package) with testify mocks; `tests/` e2e against a live router.
+- Tests: `internal/service/disk` black-box (`package disk_test`); `internal/service/object_storage` white-box (same package) with mocks; `tests/` e2e against a live router. **Only those two packages have unit tests** — `apikey`/`auth`/`token`/`user` services are covered by e2e only.
 
 ## disk service quirks (easy to get wrong)
 
@@ -71,9 +72,18 @@ internal/
 ## auth / apikey gotchas
 
 - JWT (HS256) `Claims` carry a `Type` (`access`/`refresh`) and a `jti`; access and refresh are validated against expected type. Refresh tokens are **single-use**: stored in Redis `refresh:<jti>` and consumed via `GetDel` (rotation) — a replayed old refresh token fails with `ErrRefreshRevoked`. Logout denylists the access `jti` until it expires.
-- API keys are stored as raw `key` (unique), no prefix and no hash; the middleware (`CheckApiKey`) looks the key up by exact match via `service.Validate` → `repo.GetByKey`. Revoking deletes the row. Signup auto-creates the first key and returns it in the `api_key` field; `GET /account/apikeys` returns the full keys.
-- All handlers respond via the shared envelope `handler.OK`/`handler.Fail`: `{"success": bool, "data"?: any, "error"?: {code, message}}`. Error **codes are string constants** in `internal/handler/errors.go` (e.g. `BAD_REQUEST`, `EMAIL_EXISTS`, `TOKEN_REQUIRED`, `INVALID_API_KEY`) — e2e tests assert on these, so don't rename them casually.
+- API keys are stored no prefix; the middleware (`CheckApiKey`) looks the key up by exact match via `service.Validate` → `repo.GetByKey`. Revoking deletes the row. Signup auto-creates the first key and returns it in the `api_key` field; `GET /account/apikeys` returns the full keys.
+- Handlers respond via the shared envelope `handler.OK`/`handler.Fail`: `{"success": bool, "data"?: any, "error"?: {code, message}}`. Error **codes are string constants** in `internal/handler/errors.go` (e.g. `BAD_REQUEST`, `EMAIL_EXISTS`, `TOKEN_REQUIRED`, `INVALID_API_KEY`) — e2e tests assert on these, so don't rename them casually.
 - Gin context keys for authenticated identity: `helpers.AuthUserIDKey` (`"auth_user_id"`) and `helpers.ApiKeyIDKey` (`"api_key_id"`).
+
+## API surface (routes differ by auth system)
+
+All routes are under `/api/v1`.
+
+- **JWT-protected** (auth/login side): `signup`, `signin`, `refresh`, `account`, `account/logout` — and `account/apikeys` (create/list/revoke) which sits under `AuthMiddleware.CheckAuth`.
+- **API-key-protected** (object storage): everything under `accounts/:account_id/...` (buckets + objects). It uses **two** middlewares: `ApiKeyMiddleware.CheckApiKey` then `RequireAccount` — the `:account_id` path segment must equal the authenticated key's `user_id`, else `403 FORBIDDEN_ACCOUNT`. Do not skip `RequireAccount`; without it a bogus account id surfaces as a foreign-key 500 instead of a clean rejection.
+- **Public (no auth)**: `GET public/buckets/:bucket_name/objects/*object_key` — served from the public symlink namespace. Public bucket names leak only via this route.
+- The health server (default `localhost:8081`) serves `/healthz` only; API routes never live there.
 
 ## Conventions
 
@@ -83,5 +93,6 @@ internal/
 
 ## Design principles
 
-- **Each method does one job.** Find-then-act (e.g. check-exists-then-delete) is orchestration — wire two single-purpose methods together at the service layer rather than pushing double-duty into one call.
+- **Each method does one job.** Find-then-act (e.g. check-exists-then-delete) is orchestration — wire two single-purpose methods together at the service layer rather than pushing double-duty into one call. 
+- **For sql query string write it as (Repeat Yourself)**
 - **Partial updates over full replacement.** `UpdateBucket(ctx, name, ownerID, update model.UpdateBucketInput)` uses pointer fields (`*BucketVisibility`) to express which fields change; `ReplaceBucket` exists but partial updates are preferred for single-field mutations.

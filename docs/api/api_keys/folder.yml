@@ -1,0 +1,9 @@
+info:
+  name: api_keys
+  type: folder
+  seq: 7
+
+request:
+  auth:
+    type: bearer
+    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJUeXBlIjoiYWNjZXNzIiwiaXNzIjoiY2Fpcm8iLCJzdWIiOiIwMTIxNWMyYS00YzY1LTQxZmMtOTg4Yy02ZWE5ZmZiMDk3ODIiLCJhdWQiOlsiY2Fpcm8tYXBpIl0sImV4cCI6MTc4NTk0MzkzMSwiaWF0IjoxNzg1OTQyMTMxLCJqdGkiOiI5NDI5ZmE1NC0wMGMxLTRhZTAtYmY1Ny1kMWM2ODg0ZDNiOTYifQ.kOExBJsL9gzHQCSMSUBya6RwEZ8zUZbV-yU3gUm8m8I

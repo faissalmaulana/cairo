@@ -1,0 +1,21 @@
+info:
+  name: Signin Account
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{base_url}}/{{prefix_api_v1}}/signin"
+  body:
+    type: json
+    data: |-
+      {
+       "email":"fais@example.com",
+        "password":"password123"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

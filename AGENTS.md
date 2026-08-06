@@ -82,7 +82,7 @@ All routes are under `/api/v1`.
 
 - **JWT-protected** (auth/login side): `signup`, `signin`, `refresh`, `account`, `account/logout` — and `account/apikeys` (create/list/revoke) which sits under `AuthMiddleware.CheckAuth`.
 - **API-key-protected** (object storage): everything under `accounts/:account_id/...` (buckets + objects). It uses **two** middlewares: `ApiKeyMiddleware.CheckApiKey` then `RequireAccount` — the `:account_id` path segment must equal the authenticated key's `user_id`, else `403 FORBIDDEN_ACCOUNT`. Do not skip `RequireAccount`; without it a bogus account id surfaces as a foreign-key 500 instead of a clean rejection.
-- **Public (no auth)**: `GET public/buckets/:bucket_name/objects/*object_key` — served from the public symlink namespace. Public bucket names leak only via this route.
+- **Public (no auth)**: `GET public/buckets/:bucket_name/objects/*object_key` — served from the public symlink namespace. Public bucket names leak only via this route. Plus `GET /api/v1/docs` — a single static file (path via `DOCS_PATH`, default `./assets/documentation.html`) served with `router.StaticFile` (no directory listing / traversal; do not swap it for `router.Static`/`StaticFS` on a broad dir).
 - The health server (default `localhost:8081`) serves `/healthz` only; API routes never live there.
 
 ## Conventions

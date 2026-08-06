@@ -1,0 +1,86 @@
+opencollection: 1.0.0
+
+info:
+  name: Cairo
+  version: v.0.0.1
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+docs:
+  content: |
+    
+    # Cairo API
+
+    Object storage API built with Go + Gin. Two authentication models:
+
+    - **Bearer JWT** for account management (signup, signin, refresh, account, api keys).
+    - **API key** for object storage operations under `/accounts/:account_id/...`.
+
+    ## Setup
+
+    Run the server, then in Bruno set the `base_url` and `prefix_api_v1` environment
+    variables (`http://localhost:8080` and `api/v1` by default).
+
+    Flow:
+
+    1. `POST /api/v1/signup` → returns `access_token`, `refresh_token`, and the first `api_key`.
+    2. Use the JWT for account/apikey requests; use the `api_key` for the `:account_id` object endpoints.
+    3. Replace `:account_id` with the authenticated user id (owners match keys to accounts).
+
+    ## Authentication
+
+    | Request | Method | Path |
+    | --- | --- | --- |
+    | Signup Account | POST | `/api/v1/signup` |
+    | Signin Account | POST | `/api/v1/signin` |
+    | Relogin | POST | `/api/v1/refresh` |
+    | Get Authenticated User | GET | `/api/v1/account` |
+    | Logout | POST | `/api/v1/account/logout` |
+
+    ## API Keys
+
+    | Request | Method | Path |
+    | --- | --- | --- |
+    | Generate new api keys | POST | `/api/v1/account/apikeys` |
+    | Get api keys | GET | `/api/v1/account/apikeys` |
+    | Revoke api key | DELETE | `/api/v1/account/apikeys/:id` |
+
+    ## Buckets
+
+    All bucket routes require an API key and use `:account_id`.
+
+    | Request | Method | Path |
+    | --- | --- | --- |
+    | Get buckets | GET | `/api/v1/accounts/:account_id/buckets` |
+    | Create bucket | POST | `/api/v1/accounts/:account_id/buckets` |
+    | Get bucket | GET | `/api/v1/accounts/:account_id/buckets/:bucket_name` |
+    | Make bucket public/private | PATCH | `/api/v1/accounts/:account_id/buckets/:bucket_name/visibility` |
+    | Delete bucket | DELETE | `/api/v1/accounts/:account_id/buckets/:bucket_name` |
+
+    ## Objects
+
+    Object routes under `accounts` require an API key; the public route requires none.
+
+    | Request | Method | Path |
+    | --- | --- | --- |
+    | Get objects | GET | `/api/v1/accounts/:account_id/buckets/:bucket_name/objects` |
+    | Create object | PUT | `/api/v1/accounts/:account_id/buckets/:bucket_name/objects/*object_key` |
+    | Get object | GET | `/api/v1/accounts/:account_id/buckets/:bucket_name/objects/*object_key` |
+    | Delete object | DELETE | `/api/v1/accounts/:account_id/buckets/:bucket_name/objects/*object_key` |
+    | Get public object | GET | `/api/v1/public/buckets/:bucket_name/objects/*object_key` |
+  type: text/markdown
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

@@ -1,0 +1,28 @@
+info:
+  name: Signup Account
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/{{prefix_api_v1}}/signup"
+  body:
+    type: json
+    data: |-
+      {
+        "username":"lizzy",
+        "email":"lizzy@example.com",
+        "password":"password123"
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: prefix
+      value: api/v1
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

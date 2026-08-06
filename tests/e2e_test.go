@@ -133,6 +133,7 @@ func setupEnv(t *testing.T) http.Handler {
 		"test",
 		&handler.DependenciesHealth{DB: db, Redis: rdb},
 		"",
+		filepath.Join("..", "assets", "documentation.html"),
 		logger,
 	)
 

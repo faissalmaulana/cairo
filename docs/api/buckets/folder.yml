@@ -1,0 +1,12 @@
+info:
+  name: buckets
+  type: folder
+  seq: 8
+
+request:
+  auth:
+    type: bearer
+    token: f45e5afb15ded07819c680a6ec29953d25e53accc8e9c107f59fc7e20773ca2a
+  variables:
+    - name: account_id
+      value: 09d9513e-5dae-4fb5-a719-1dc257af0c3b

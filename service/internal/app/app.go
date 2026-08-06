@@ -79,7 +79,7 @@ func (app *Application) Mux() http.Handler {
 
 	router := gin.New()
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins:     []string{app.clientOrigin},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},

@@ -5,6 +5,7 @@ import { useAuth } from './auth/useAuth.ts';
 import ProtectedLayout from './components/ProtectedLayout.tsx';
 import BucketDetailPage from './pages/BucketDetailPage.tsx';
 import DashboardPage from './pages/DashboardPage.tsx';
+import UploadObjectPage from './pages/UploadObjectPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import SignInPage from './pages/SignInPage.tsx';
 import SignUpPage from './pages/SignUpPage.tsx';
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
             { index: true, element: <DashboardPage /> },
             { path: 'settings', element: <SettingsPage /> },
             { path: 'buckets/:bucketName', element: <BucketDetailPage /> },
+            {
+                path: 'buckets/:bucketName/upload',
+                element: <UploadObjectPage />,
+            },
         ],
     },
     {

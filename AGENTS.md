@@ -4,6 +4,8 @@
 
 Go (1.26.5) object storage API service built with **Gin**. Adds user auth (JWT access tokens + single-use refresh tokens), API-key auth, SQLite persistence, and Redis-backed token state.
 
+Frontend sibling: `apps/web/` — React client, instructions in `apps/web/AGENTS.md`.
+
 ## Commands
 
 ```bash

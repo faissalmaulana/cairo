@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AuthProvider } from './auth/AuthProvider.tsx';
 import { useAuth } from './auth/useAuth.ts';
 import ProtectedLayout from './components/ProtectedLayout.tsx';
+import BucketDetailPage from './pages/BucketDetailPage.tsx';
 import DashboardPage from './pages/DashboardPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import SignInPage from './pages/SignInPage.tsx';
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
         children: [
             { index: true, element: <DashboardPage /> },
             { path: 'settings', element: <SettingsPage /> },
+            { path: 'buckets/:bucketName', element: <BucketDetailPage /> },
         ],
     },
     {

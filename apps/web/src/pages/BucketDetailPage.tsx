@@ -141,6 +141,8 @@ export default function BucketDetailPage() {
           )}
           {bucket && activeTab === "files" && (
             <BucketFilesTab
+              accountId={user!.id}
+              apiKey={apiKey!}
               objects={objectsQuery.data}
               isPending={objectsQuery.isPending}
               error={objectsQuery.error}

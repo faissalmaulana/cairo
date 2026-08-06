@@ -1,6 +1,16 @@
 import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
-import { File, Folder, FolderOpen, Search, Trash2, Upload } from "lucide-react";
+import {
+  Download,
+  File,
+  Folder,
+  FolderOpen,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { bucketsApi } from "../../api/buckets.ts";
 import type { ObjectMetadata } from "../../api/buckets.ts";
 
 interface FileNode {
@@ -75,6 +85,8 @@ function formatBytes(size: number): string {
 }
 
 export default function BucketFilesTab({
+  accountId,
+  apiKey,
   objects,
   isPending,
   error,
@@ -82,6 +94,8 @@ export default function BucketFilesTab({
   isDeletingObject,
   deletingObjectKey,
 }: {
+  accountId: string;
+  apiKey: string;
   objects: ObjectMetadata[] | undefined;
   isPending: boolean;
   error: Error | null;
@@ -91,6 +105,13 @@ export default function BucketFilesTab({
 }) {
   const { bucketName } = useParams();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [preview, setPreview] = useState<FileNode | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewContentType, setPreviewContentType] = useState<string | null>(
+    null,
+  );
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const toggleExpanded = (path: string) => {
     setExpanded((prev) => {
@@ -102,6 +123,43 @@ export default function BucketFilesTab({
       }
       return next;
     });
+  };
+
+  const openPreview = async (node: FileNode) => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreview(node);
+    setPreviewUrl(null);
+    setPreviewContentType(null);
+    setPreviewError(null);
+    setIsLoadingPreview(true);
+    try {
+      const { blob, contentType } = await bucketsApi.download(
+        accountId,
+        apiKey,
+        bucketName!,
+        node.key,
+      );
+      setPreviewContentType(contentType);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setPreviewError(
+        err instanceof Error ? err.message : "Failed to load object",
+      );
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreview(null);
+    setPreviewUrl(null);
+    setPreviewContentType(null);
+    setPreviewError(null);
   };
 
   return (
@@ -172,6 +230,7 @@ export default function BucketFilesTab({
                   depth={0}
                   expanded={expanded}
                   onToggle={toggleExpanded}
+                  onOpenFile={openPreview}
                   onDeleteObject={onDeleteObject}
                   isDeletingObject={isDeletingObject}
                   deletingObjectKey={deletingObjectKey}
@@ -179,6 +238,74 @@ export default function BucketFilesTab({
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closePreview}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="truncate font-semibold text-neutral-900">
+                  {preview.name}
+                </h3>
+                <p className="truncate font-mono text-xs text-neutral-500">
+                  {preview.key} · {formatBytes(preview.meta.size)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePreview}
+                title="Close"
+                aria-label="Close"
+                className="rounded p-1 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-neutral-100">
+              {isLoadingPreview && (
+                <p className="p-4 text-sm text-neutral-500">
+                  Loading preview...
+                </p>
+              )}
+              {previewError && (
+                <p className="p-4 text-sm text-red-600">{previewError}</p>
+              )}
+              {previewUrl && previewContentType?.startsWith("image/") && (
+                <img
+                  src={previewUrl}
+                  alt={preview.name}
+                  className="mx-auto max-h-full max-w-full"
+                />
+              )}
+              {previewUrl && !previewContentType?.startsWith("image/") && (
+                <iframe
+                  src={previewUrl}
+                  title={preview.name}
+                  className="h-full w-full"
+                />
+              )}
+            </div>
+            <div className="border-t border-neutral-200 px-4 py-3">
+              {previewUrl && (
+                <a
+                  href={previewUrl}
+                  download={preview.name}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -190,6 +317,7 @@ function TreeRows({
   depth,
   expanded,
   onToggle,
+  onOpenFile,
   onDeleteObject,
   isDeletingObject,
   deletingObjectKey,
@@ -198,6 +326,7 @@ function TreeRows({
   depth: number;
   expanded: Set<string>;
   onToggle: (path: string) => void;
+  onOpenFile: (node: FileNode) => void;
   onDeleteObject: (key: string) => void;
   isDeletingObject: boolean;
   deletingObjectKey: string | null;
@@ -234,6 +363,7 @@ function TreeRows({
                 depth={depth + 1}
                 expanded={expanded}
                 onToggle={onToggle}
+                onOpenFile={onOpenFile}
                 onDeleteObject={onDeleteObject}
                 isDeletingObject={isDeletingObject}
                 deletingObjectKey={deletingObjectKey}
@@ -243,7 +373,8 @@ function TreeRows({
         ) : (
           <tr
             key={node.key}
-            className="border-b border-neutral-100 hover:bg-neutral-50"
+            className="cursor-pointer border-b border-neutral-100 hover:bg-neutral-50"
+            onClick={() => onOpenFile(node)}
           >
             <td
               className="py-2 font-medium text-neutral-900"
@@ -261,7 +392,10 @@ function TreeRows({
             <td className="px-3 py-2">
               <button
                 type="button"
-                onClick={() => onDeleteObject(node.key)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteObject(node.key);
+                }}
                 disabled={isDeletingObject && deletingObjectKey === node.key}
                 title={`Delete ${node.name}`}
                 aria-label={`Delete ${node.name}`}

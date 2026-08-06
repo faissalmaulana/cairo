@@ -1,4 +1,4 @@
-import { apiFetch } from "./client.ts";
+import { API_BASE, ApiError, apiFetch } from "./client.ts";
 
 export interface Bucket {
   id: string;
@@ -13,6 +13,11 @@ export interface ObjectMetadata {
   key: string;
   size: number;
   sha256sum: string;
+}
+
+export interface DownloadedObject {
+  blob: Blob;
+  contentType: string;
 }
 
 export const bucketsApi = {
@@ -88,5 +93,40 @@ export const bucketsApi = {
       `/accounts/${accountId}/buckets/${bucketName}/objects/${encodeURI(key)}`,
       { method: "DELETE", token: apiKey },
     );
+  },
+
+  download(
+    accountId: string,
+    apiKey: string,
+    bucketName: string,
+    key: string,
+  ): Promise<DownloadedObject> {
+    const url = `${API_BASE}/accounts/${accountId}/buckets/${bucketName}/objects/${encodeURI(key)}`;
+    return fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    }).then(async (res) => {
+      if (!res.ok) {
+        let code = "SERVER_ERROR";
+        let message = `Request failed with status ${res.status}`;
+        try {
+          const payload = (await res.json()) as {
+            error?: { code?: string; message?: string };
+          };
+          if (payload.error?.code) {
+            code = payload.error.code;
+          }
+          if (payload.error?.message) {
+            message = payload.error.message;
+          }
+        } catch {
+          // non-JSON error body — keep status-based message
+        }
+        throw new ApiError(res.status, code, message);
+      }
+      return {
+        blob: await res.blob(),
+        contentType: res.headers.get("content-type") ?? "application/octet-stream",
+      };
+    });
   },
 };

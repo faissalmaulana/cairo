@@ -37,6 +37,7 @@ type ObjectResponse struct {
 	Key       string `json:"key"`
 	Size      int    `json:"size"`
 	Sha256sum string `json:"sha256sum"`
+	CreatedAt string `json:"created_at"`
 }
 
 func toBucketResponse(bucket model.Bucket) BucketResponse {
@@ -55,6 +56,7 @@ func toObjectResponse(obj model.Object) ObjectResponse {
 		Key:       obj.Key,
 		Size:      obj.Size,
 		Sha256sum: obj.Sha256sum,
+		CreatedAt: obj.CreatedAt.Format(time.RFC3339),
 	}
 }
 

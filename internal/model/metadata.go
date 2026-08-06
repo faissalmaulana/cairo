@@ -33,6 +33,7 @@ type Object struct {
 	Size        int
 	Sha256sum   string
 	ContentType string
+	CreatedAt   time.Time
 }
 
 type UpdateBucketInput struct {

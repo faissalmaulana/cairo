@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/faissalmaulana/cairo/internal/model"
 	"github.com/faissalmaulana/cairo/internal/repository"
@@ -32,6 +33,7 @@ func (or *SQLiteObjectRepository) WithTx(tx *sql.Tx) *SQLiteObjectRepository {
 func scanObject(row *sql.Row) (model.Object, error) {
 	var obj model.Object
 
+	var createdAt int64
 	err := row.Scan(
 		&obj.ID,
 		&obj.BucketID,
@@ -40,10 +42,13 @@ func scanObject(row *sql.Row) (model.Object, error) {
 		&obj.Size,
 		&obj.Sha256sum,
 		&obj.ContentType,
+		&createdAt,
 	)
 	if err != nil {
 		return model.Object{}, err
 	}
+
+	obj.CreatedAt = time.Unix(createdAt, 0)
 
 	return obj, nil
 }
@@ -51,7 +56,7 @@ func scanObject(row *sql.Row) (model.Object, error) {
 func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model.Object) (string, error) {
 	id := uuid.NewString()
 
-	query := `INSERT INTO objects(id,bucket_id,key,path,size,sha256sum,content_type) VALUES(?,?,?,?,?,?,?)`
+	query := `INSERT INTO objects(id,bucket_id,key,path,size,sha256sum,content_type,created_at) VALUES(?,?,?,?,?,?,?,?)`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -66,6 +71,7 @@ func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model
 		object.Size,
 		object.Sha256sum,
 		object.ContentType,
+		time.Now().Unix(),
 	)
 	if err != nil {
 		return "", err
@@ -75,7 +81,7 @@ func (or *SQLiteObjectRepository) CreateObject(ctx context.Context, object model
 }
 
 func (or *SQLiteObjectRepository) GetObject(ctx context.Context, bucketID, name string) (model.Object, error) {
-	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type FROM objects WHERE bucket_id=? AND key=?`
+	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type,created_at FROM objects WHERE bucket_id=? AND key=?`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -92,7 +98,7 @@ func (or *SQLiteObjectRepository) GetObject(ctx context.Context, bucketID, name 
 }
 
 func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID string) ([]model.Object, error) {
-	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type FROM objects WHERE bucket_id=? ORDER BY key`
+	query := `SELECT id,bucket_id,key,path,size,sha256sum,content_type,created_at FROM objects WHERE bucket_id=? ORDER BY key`
 
 	queryctx, cancel := context.WithTimeout(ctx, variables.ContextTimeOut)
 	defer cancel()
@@ -106,6 +112,7 @@ func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID stri
 	objects := make([]model.Object, 0)
 	for rows.Next() {
 		var obj model.Object
+		var createdAt int64
 
 		if err := rows.Scan(
 			&obj.ID,
@@ -115,9 +122,12 @@ func (or *SQLiteObjectRepository) ListObjects(ctx context.Context, bucketID stri
 			&obj.Size,
 			&obj.Sha256sum,
 			&obj.ContentType,
+			&createdAt,
 		); err != nil {
 			return nil, err
 		}
+
+		obj.CreatedAt = time.Unix(createdAt, 0)
 
 		objects = append(objects, obj)
 	}

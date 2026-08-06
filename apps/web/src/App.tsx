@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import SignInPage from './pages/SignInPage.tsx';
 import SignUpPage from './pages/SignUpPage.tsx';
+import { Toaster } from 'react-hot-toast';
 
 function RequireAuth({ children }: { children: ReactNode }) {
     const { isAuthenticated, isInitializing } = useAuth();
@@ -69,6 +70,7 @@ function App() {
     return (
         <AuthProvider>
             <RouterProvider router={router} />
+            <Toaster position='bottom-right'/>
         </AuthProvider>
     );
 }

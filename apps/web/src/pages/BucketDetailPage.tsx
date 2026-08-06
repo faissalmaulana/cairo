@@ -68,6 +68,24 @@ export default function BucketDetailPage() {
     },
   });
 
+  const deleteObjectMutation = useMutation({
+    mutationFn: (key: string) =>
+      bucketsApi.removeObject(user!.id, apiKey!, bucketName!, key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["objects", bucketName] });
+      toast.success("Object deleted");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleDeleteObject = (key: string) => {
+    if (window.confirm(`Delete object "${key}"? This cannot be undone.`)) {
+      deleteObjectMutation.mutate(key);
+    }
+  };
+
   const handleDelete = () => {
     if (window.confirm(`Delete bucket "${bucketName}"? This cannot be undone.`)) {
       deleteMutation.mutate();
@@ -126,6 +144,9 @@ export default function BucketDetailPage() {
               objects={objectsQuery.data}
               isPending={objectsQuery.isPending}
               error={objectsQuery.error}
+              onDeleteObject={handleDeleteObject}
+              isDeletingObject={deleteObjectMutation.isPending}
+              deletingObjectKey={deleteObjectMutation.variables ?? null}
             />
           )}
         </section>

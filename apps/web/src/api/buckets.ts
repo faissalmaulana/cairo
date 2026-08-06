@@ -77,4 +77,16 @@ export const bucketsApi = {
       { token: apiKey },
     );
   },
+
+  removeObject(
+    accountId: string,
+    apiKey: string,
+    bucketName: string,
+    key: string,
+  ): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(
+      `/accounts/${accountId}/buckets/${bucketName}/objects/${encodeURI(key)}`,
+      { method: "DELETE", token: apiKey },
+    );
+  },
 };

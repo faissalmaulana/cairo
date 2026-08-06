@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
-import { File, Folder, FolderOpen, Search, Upload } from "lucide-react";
+import { File, Folder, FolderOpen, Search, Trash2, Upload } from "lucide-react";
 import type { ObjectMetadata } from "../../api/buckets.ts";
 
 interface FileNode {
@@ -78,10 +78,16 @@ export default function BucketFilesTab({
   objects,
   isPending,
   error,
+  onDeleteObject,
+  isDeletingObject,
+  deletingObjectKey,
 }: {
   objects: ObjectMetadata[] | undefined;
   isPending: boolean;
   error: Error | null;
+  onDeleteObject: (key: string) => void;
+  isDeletingObject: boolean;
+  deletingObjectKey: string | null;
 }) {
   const { bucketName } = useParams();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -146,13 +152,14 @@ export default function BucketFilesTab({
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Size</th>
                 <th className="px-3 py-2 font-medium">Uploaded at</th>
+                <th className="px-3 py-2 font-medium">Delete</th>
               </tr>
             </thead>
             <tbody>
               {objects?.length === 0 && (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={4}
                     className="px-3 py-6 text-center text-neutral-400"
                   >
                     No objects yet.
@@ -165,6 +172,9 @@ export default function BucketFilesTab({
                   depth={0}
                   expanded={expanded}
                   onToggle={toggleExpanded}
+                  onDeleteObject={onDeleteObject}
+                  isDeletingObject={isDeletingObject}
+                  deletingObjectKey={deletingObjectKey}
                 />
               )}
             </tbody>
@@ -180,11 +190,17 @@ function TreeRows({
   depth,
   expanded,
   onToggle,
+  onDeleteObject,
+  isDeletingObject,
+  deletingObjectKey,
 }: {
   nodes: TreeNode[];
   depth: number;
   expanded: Set<string>;
   onToggle: (path: string) => void;
+  onDeleteObject: (key: string) => void;
+  isDeletingObject: boolean;
+  deletingObjectKey: string | null;
 }) {
   return (
     <>
@@ -210,6 +226,7 @@ function TreeRows({
               </td>
               <td className="px-3 py-2 text-neutral-400">—</td>
               <td className="px-3 py-2 text-neutral-400">—</td>
+              <td className="px-3 py-2" />
             </tr>
             {expanded.has(node.path) && (
               <TreeRows
@@ -217,6 +234,9 @@ function TreeRows({
                 depth={depth + 1}
                 expanded={expanded}
                 onToggle={onToggle}
+                onDeleteObject={onDeleteObject}
+                isDeletingObject={isDeletingObject}
+                deletingObjectKey={deletingObjectKey}
               />
             )}
           </Fragment>
@@ -238,6 +258,18 @@ function TreeRows({
               {formatBytes(node.meta.size)}
             </td>
             <td className="px-3 py-2 text-neutral-400">—</td>
+            <td className="px-3 py-2">
+              <button
+                type="button"
+                onClick={() => onDeleteObject(node.key)}
+                disabled={isDeletingObject && deletingObjectKey === node.key}
+                title={`Delete ${node.name}`}
+                aria-label={`Delete ${node.name}`}
+                className="rounded-lg border border-red-300 p-1.5 text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </td>
           </tr>
         ),
       )}

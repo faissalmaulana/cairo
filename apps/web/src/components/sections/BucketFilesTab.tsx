@@ -265,9 +265,9 @@ function TreeRows({
                 disabled={isDeletingObject && deletingObjectKey === node.key}
                 title={`Delete ${node.name}`}
                 aria-label={`Delete ${node.name}`}
-                className="rounded-lg border border-red-300 p-1.5 text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded p-1 text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             </td>
           </tr>

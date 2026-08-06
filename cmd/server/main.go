@@ -118,6 +118,7 @@ func main() {
 		helpers.GetEnv("HEALTH_ADDR", "localhost:8081"),
 		helpers.GetEnv("DOCS_PATH", "./assets/documentation.html"),
 		logger,
+		helpers.GetEnv("CLIENT_ORIGIN", ""),
 	)
 	app.Run()
 }

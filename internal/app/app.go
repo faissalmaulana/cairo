@@ -14,6 +14,7 @@ import (
 
 	"github.com/faissalmaulana/cairo/internal/handler"
 	"github.com/faissalmaulana/cairo/internal/middleware"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,6 +34,7 @@ type Application struct {
 	healthAddr           string
 	docsPath             string
 	logger               *slog.Logger
+	clientOrigin         string
 }
 
 func New(
@@ -48,6 +50,7 @@ func New(
 	healthAddr string,
 	docsPath string,
 	logger *slog.Logger,
+	clientOrigin string,
 ) *Application {
 
 	return &Application{
@@ -66,6 +69,7 @@ func New(
 		healthAddr:           healthAddr,
 		docsPath:             docsPath,
 		logger:               logger,
+		clientOrigin:         clientOrigin,
 	}
 }
 
@@ -74,6 +78,14 @@ func (app *Application) Mux() http.Handler {
 	gin.SetMode(goodModeToGinMode(app.mode))
 
 	router := gin.New()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	router.Use(middleware.RequestIDMiddleware())
 	router.Use(middleware.SlogMiddleware(app.logger))

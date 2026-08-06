@@ -135,6 +135,7 @@ func setupEnv(t *testing.T) http.Handler {
 		"",
 		filepath.Join("..", "assets", "documentation.html"),
 		logger,
+		"",
 	)
 
 	checkHealthDependency(t, application.HealthMux())

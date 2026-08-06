@@ -1,0 +1,40 @@
+import { Link, useNavigate } from 'react-router';
+import { useAuth } from '../auth/useAuth.ts';
+import Avatar from './Avatar.tsx';
+
+export default function Navbar() {
+    const { signOut } = useAuth();
+    const navigate = useNavigate();
+
+    const handleSignOut = async () => {
+        try {
+            await signOut();
+        } finally {
+            navigate('/signin', { replace: true });
+        }
+    };
+
+    return (
+        <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/80 backdrop-blur">
+            <div className="mx-auto flex max-w-full items-center justify-between px-4 py-4">
+                <Link to="/" className="flex shrink-0 items-center">
+                    <img
+                        src="/logo/cairo-logo.png"
+                        alt="cairo"
+                        className="h-7 w-auto"
+                    />
+                </Link>
+                <div className="flex items-center gap-3">
+                    <Avatar />
+                    <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
+                    >
+                        Sign out
+                    </button>
+                </div>
+            </div>
+        </header>
+    );
+}

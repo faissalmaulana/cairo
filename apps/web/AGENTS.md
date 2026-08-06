@@ -4,7 +4,7 @@ Frontend for the cairo object-storage API (Go/Gin backend at the repo root — t
 
 **The dependencies are already fixed**. Do not install new dependency /upgrade any dependencies.  
 
-Vite 8 + React 19 + TypeScript 6 SPA, Tailwind CSS 4, oxlint. Fresh Vite template scaffold — `src/App.tsx` is still the template counter demo, not the real client yet.
+Vite 8 + React 19 + TypeScript 6 SPA, Tailwind CSS 4, oxlint. Auth shell is in place: routing (`react-router` v8), in-memory auth state, and a data fetching layer (`@tanstack/react-query`) — see `src/App.tsx`, `src/auth/`, `src/api/`, `src/pages/`.
 
 ## Commands
 
@@ -25,8 +25,10 @@ pnpm lint      # oxlint (NOT eslint)
 - Build uses `tsc -b` over project references (`tsconfig.app.json` for `src/`, `tsconfig.node.json` for `vite.config.ts`).
 - `pnpm-workspace.yaml` is **not** a monorepo workspace — it only excludes `postcss@8.5.23` and `vite@8.2.0` from pnpm's minimum-release-age check.
 - Intended stack already in `package.json`: `@tanstack/react-query`, `@tanstack/react-form`, `react-router` (v8 — the package is `react-router`, not `react-router-dom`).
+- **Auth flow**: tokens live in a module singleton (`src/api/tokens.ts`) persisted to localStorage under `cairo.auth`; the fetch wrapper `src/api/client.ts` attaches `Authorization: Bearer` automatically and rotates refresh tokens single-flight on 401 (POST `/refresh`). `src/auth/AuthProvider.tsx` exposes `useAuth()` (`src/auth/useAuth.ts`). Signin/signup use `@tanstack/react-form` in `src/pages/SignInPage.tsx` / `SignUpPage.tsx`.
+- Error envelope: `{ success, data?, error?: { code, message } }` — the client throws `ApiError` (`status`, `code`, `message`); auth-relevant codes are `BAD_REQUEST`, `EMAIL_EXISTS` (409), `INVALID` (401).
 
 ## Backend integration
 
 - API: `http://localhost:8080/api/v1` — JWT-protected account routes + API-key-protected object-storage routes. Full surface in the root `AGENTS.md`; OpenAPI spec in `docs/api/`.
-- `vite.config.ts` has **no dev proxy** yet — the API is not wired up. If you add one, remember the backend also runs a separate health server on `:8081` (health server should not to integrate to any client).
+- **No dev proxy and none needed** — the backend has CORS enabled; `src/api/client.ts` calls `API_BASE` directly (override via `VITE_API_BASE`). The separate health server on `:8081` must never be integrated into the client.

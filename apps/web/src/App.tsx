@@ -1,11 +1,76 @@
-function App() {
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import type { ReactNode } from 'react';
+import { AuthProvider } from './auth/AuthProvider.tsx';
+import { useAuth } from './auth/useAuth.ts';
+import ProtectedLayout from './components/ProtectedLayout.tsx';
+import DashboardPage from './pages/DashboardPage.tsx';
+import SettingsPage from './pages/SettingsPage.tsx';
+import SignInPage from './pages/SignInPage.tsx';
+import SignUpPage from './pages/SignUpPage.tsx';
 
-  return (
-    <>
-      <h1>Hello</h1>
-      <div className="text-green-500">Hello,World</div>
-    </>
-  );
+function RequireAuth({ children }: { children: ReactNode }) {
+    const { isAuthenticated, isInitializing } = useAuth();
+    if (isInitializing) {
+        return null;
+    }
+    if (!isAuthenticated) {
+        return <Navigate to="/signin" replace />;
+    }
+    return <>{children}</>;
+}
+
+function GuestOnly({ children }: { children: ReactNode }) {
+    const { isAuthenticated, isInitializing } = useAuth();
+    if (isInitializing) {
+        return null;
+    }
+    if (isAuthenticated) {
+        return <Navigate to="/" replace />;
+    }
+    return <>{children}</>;
+}
+
+const router = createBrowserRouter([
+    {
+        path: '/',
+        element: (
+            <RequireAuth>
+                <ProtectedLayout />
+            </RequireAuth>
+        ),
+        children: [
+            { index: true, element: <DashboardPage /> },
+            { path: 'settings', element: <SettingsPage /> },
+        ],
+    },
+    {
+        path: '/signin',
+        element: (
+            <GuestOnly>
+                <SignInPage />
+            </GuestOnly>
+        ),
+    },
+    {
+        path: '/signup',
+        element: (
+            <GuestOnly>
+                <SignUpPage />
+            </GuestOnly>
+        ),
+    },
+    {
+        path: '*',
+        element: <Navigate to="/" replace />,
+    },
+]);
+
+function App() {
+    return (
+        <AuthProvider>
+            <RouterProvider router={router} />
+        </AuthProvider>
+    );
 }
 
 export default App;

@@ -8,6 +8,7 @@ import { bucketsApi } from "../api/buckets.ts";
 import { apiKeysApi } from "../api/apikeys.ts";
 import BucketFilesTab from "../components/sections/BucketFilesTab.tsx";
 import BucketOverviewTab from "../components/sections/BucketOverviewTab.tsx";
+import ConfirmDialog from "../components/ConfirmDialog.tsx";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -22,6 +23,11 @@ export default function BucketDetailPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const apiKeysQuery = useQuery({
     queryKey: ["api-keys"],
@@ -81,15 +87,19 @@ export default function BucketDetailPage() {
   });
 
   const handleDeleteObject = (key: string) => {
-    if (window.confirm(`Delete object "${key}"? This cannot be undone.`)) {
-      deleteObjectMutation.mutate(key);
-    }
+    setPendingConfirm({
+      title: "Delete object",
+      message: `Delete object "${key}"? This cannot be undone.`,
+      onConfirm: () => deleteObjectMutation.mutate(key),
+    });
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Delete bucket "${bucketName}"? This cannot be undone.`)) {
-      deleteMutation.mutate();
-    }
+    setPendingConfirm({
+      title: "Delete bucket",
+      message: `Delete bucket "${bucketName}"? This cannot be undone.`,
+      onConfirm: () => deleteMutation.mutate(),
+    });
   };
 
   const bucket = bucketQuery.data;
@@ -153,6 +163,20 @@ export default function BucketDetailPage() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        message={pendingConfirm?.message ?? ""}
+        confirmLabel="Delete"
+        tone="danger"
+        isConfirming={deleteMutation.isPending || deleteObjectMutation.isPending}
+        onConfirm={() => {
+          pendingConfirm?.onConfirm();
+          setPendingConfirm(null);
+        }}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </main>
   );
 }

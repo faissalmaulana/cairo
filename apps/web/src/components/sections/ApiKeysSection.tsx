@@ -5,12 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiKeysApi } from "../../api/apikeys.ts";
 import type { ApiKey } from "../../api/apikeys.ts";
 import { formatDateTime } from "../../lib/format.ts";
+import ConfirmDialog from "../ConfirmDialog.tsx";
 
 const QUERY_KEY = ["api-keys"] as const;
 
 export default function ApiKeysSection() {
   const queryClient = useQueryClient();
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const keysQuery = useQuery({
     queryKey: QUERY_KEY,
@@ -32,9 +34,11 @@ export default function ApiKeysSection() {
     mutationFn: apiKeysApi.revoke,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      setRevokingId(null);
       toast.success("API key revoked");
     },
     onError: (error) => {
+      setRevokingId(null);
       toast.error(error.message);
     },
   });
@@ -52,9 +56,7 @@ export default function ApiKeysSection() {
   };
 
   const handleRevoke = (key: ApiKey) => {
-    if (window.confirm(`Revoke API key ${key.id}? This cannot be undone.`)) {
-      revokeMutation.mutate(key.id);
-    }
+    setRevokingId(key.id);
   };
 
   return (
@@ -141,6 +143,21 @@ export default function ApiKeysSection() {
           })}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={revokingId !== null}
+        title="Revoke API key"
+        message={`Revoke API key ${revokingId ?? ""}? This cannot be undone.`}
+        confirmLabel="Revoke"
+        tone="danger"
+        isConfirming={revokeMutation.isPending}
+        onConfirm={() => {
+          if (revokingId !== null) {
+            revokeMutation.mutate(revokingId);
+          }
+        }}
+        onCancel={() => setRevokingId(null)}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ export interface ObjectMetadata {
   key: string;
   size: number;
   sha256sum: string;
+  created_at: string;
 }
 
 export interface DownloadedObject {

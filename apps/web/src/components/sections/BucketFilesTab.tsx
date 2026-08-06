@@ -105,6 +105,7 @@ export default function BucketFilesTab({
 }) {
   const { bucketName } = useParams();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const [preview, setPreview] = useState<FileNode | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewContentType, setPreviewContentType] = useState<string | null>(
@@ -124,6 +125,16 @@ export default function BucketFilesTab({
       return next;
     });
   };
+
+  const searchQuery = query.trim().toLowerCase();
+  const filteredObjects =
+    searchQuery === ""
+      ? objects
+      : objects?.filter((object) =>
+          object.key.toLowerCase().includes(searchQuery),
+        );
+  const tree =
+    filteredObjects === undefined ? undefined : buildTree(filteredObjects);
 
   const openPreview = async (node: FileNode) => {
     if (previewUrl) {
@@ -183,20 +194,16 @@ export default function BucketFilesTab({
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <input
             type="search"
             placeholder="Search objects..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="w-full rounded-lg border border-neutral-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
           />
         </div>
-        <select className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-blue-500">
-          <option>All sizes</option>
-          <option>Large</option>
-          <option>Medium</option>
-          <option>Small</option>
-        </select>
       </div>
 
       {isPending && <p className="text-sm text-neutral-500">Loading objects...</p>}
@@ -214,19 +221,21 @@ export default function BucketFilesTab({
               </tr>
             </thead>
             <tbody>
-              {objects?.length === 0 && (
+              {tree === undefined ? null : tree.length === 0 ? (
                 <tr>
                   <td
                     colSpan={4}
                     className="px-3 py-6 text-center text-neutral-400"
                   >
-                    No objects yet.
+                    {searchQuery === ""
+                      ? "No objects yet."
+                      : "No objects match your search."}
                   </td>
                 </tr>
-              )}
-              {objects && (
+              ) : null}
+              {tree && (
                 <TreeRows
-                  nodes={buildTree(objects)}
+                  nodes={tree}
                   depth={0}
                   expanded={expanded}
                   onToggle={toggleExpanded}
@@ -388,7 +397,9 @@ function TreeRows({
             <td className="px-3 py-2 text-neutral-700">
               {formatBytes(node.meta.size)}
             </td>
-            <td className="px-3 py-2 text-neutral-400">—</td>
+            <td className="px-3 py-2 text-neutral-400">
+              {new Date(node.meta.created_at).toLocaleDateString()}
+            </td>
             <td className="px-3 py-2">
               <button
                 type="button"
